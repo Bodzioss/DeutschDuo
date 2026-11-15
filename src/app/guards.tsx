@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { backend, backendConfigError } from '@/data/backend';
 import { useProfileStore } from '@/stores/profileStore';
+import { useSync } from '@/data/useSync';
 
 /** Device must be signed into the pair account; profiles are loaded from cache (and refreshed when online). */
 export function RequireAuth({ children }: { children: ReactNode }) {
@@ -36,6 +37,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 export function RequireProfile({ children }: { children: ReactNode }) {
   const currentId = useProfileStore((s) => s.currentId);
   const location = useLocation();
+  useSync(currentId);
   if (!currentId) return <Navigate to="/who" replace state={{ from: location.pathname }} />;
   return <>{children}</>;
 }
