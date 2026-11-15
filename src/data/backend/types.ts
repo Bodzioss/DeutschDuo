@@ -16,6 +16,11 @@ export interface Backend {
   signIn(password: string): Promise<void>;
   isSignedIn(): Promise<boolean>;
   signOut(): Promise<void>;
+  /**
+   * Called after an 'unauthorized' response. Tries to refresh the session; true when the device is still signed in
+   * (refreshed, or the failure was transient), false only when the server definitively rejected the session.
+   */
+  recoverSession(): Promise<boolean>;
   fetchProfiles(): Promise<Profile[]>;
   updateProfile(p: Profile): Promise<void>;
   /** Idempotent by review id. */

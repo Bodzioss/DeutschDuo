@@ -4,6 +4,8 @@ import { cardId, type CardRecord, type Grade, type ReviewRecord } from '@/domain
 import type { SessionItem } from '@/domain/sessionBuilder';
 import type { DuoDB } from './db';
 
+export const UNLOCKED_AT = new Date(0).toISOString();
+
 export async function recordReview(
   db: DuoDB,
   p: { item: SessionItem; grade: Grade; durationMs: number; answer?: string; now: Date; closesQueue: boolean },
@@ -35,7 +37,8 @@ export async function recordReview(
     if (item.direction === 'de_en' && grade >= 3) {
       const enDeId = cardId(item.wordId, 'en_de');
       if (!(await db.cards.get(enDeId))) {
-        unlocked = newCard(item.wordId, 'en_de', now, startOfNextLocalDay(now));
+        // Minimal updatedAt: a real review of this card on another device must always win over this blank copy.
+        unlocked = { ...newCard(item.wordId, 'en_de', now, startOfNextLocalDay(now)), updatedAt: UNLOCKED_AT };
         await db.cards.add(unlocked);
       }
     }

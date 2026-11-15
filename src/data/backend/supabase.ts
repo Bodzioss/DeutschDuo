@@ -1,16 +1,34 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient, isAuthRetryableFetchError, type SupabaseClient } from '@supabase/supabase-js';
 import type { CardRecord, Direction, FsrsState, Grade, Profile, ReviewRecord } from '@/domain/types';
 import { BackendError, type Backend, type Cursor } from './types';
 
 const PAGE = 1000;
-/** Re-read a small window behind the cursor: sequence values can commit out of order. Merges are idempotent. */
-const OVERLAP = 200;
+/**
+ * Sequence numbers can commit out of order (a transaction that took seq S may commit after S+n is visible).
+ * Each pull therefore also re-reads rows whose server-side changed_at is within this window before the newest
+ * change already seen. Any transaction shorter than the window is covered. Merges are idempotent.
+ */
+export const SAFETY_WINDOW_MS = 2 * 60_000;
+
+/** Cursor = "<max seq seen>|<max changed_at seen>" (older plain-number cursors are still accepted). */
+export function makeCursor(seq: number, changedAt: string | null): string {
+  return changedAt ? `${seq}|${changedAt}` : String(seq);
+}
+
+export function parseCursor(c: Cursor): { seq: number; changedAfter: string | null } {
+  if (!c) return { seq: 0, changedAfter: null };
+  const [seq, at] = c.split('|');
+  return {
+    seq: Number(seq) || 0,
+    changedAfter: at ? new Date(Date.parse(at) - SAFETY_WINDOW_MS).toISOString() : null,
+  };
+}
 
 type ProfileRow = { id: string; display_name: string; daily_goal_min: number; new_per_day: number; show_pl: boolean };
-type CardRow = { card_id: string; word_id: string; direction: Direction; fsrs: FsrsState; updated_at: string; server_seq: number };
+type CardRow = { card_id: string; word_id: string; direction: Direction; fsrs: FsrsState; updated_at: string; server_seq: number; changed_at: string };
 type ReviewRow = {
   id: string; card_id: string; rating: Grade; duration_ms: number; reviewed_at: string; local_day: string;
-  was_new: boolean; closes_queue: boolean; scheduled_days: number; answer: string | null; server_seq: number;
+  was_new: boolean; closes_queue: boolean; scheduled_days: number; answer: string | null; server_seq: number; changed_at: string;
 };
 
 const toProfile = (r: ProfileRow): Profile => ({
@@ -64,19 +82,27 @@ export function createSupabaseBackend(url: string, anonKey: string, pairEmail: s
     auth: { persistSession: true, autoRefreshToken: true, storageKey: STORAGE_KEY },
   });
 
-  async function pull<R extends { server_seq: number }>(table: string, cols: string, profileId: string, since: Cursor) {
+  async function pull<R extends { server_seq: number; changed_at: string }>(table: string, cols: string, profileId: string, since: Cursor) {
+    const { seq, changedAfter } = parseCursor(since);
     const rows: R[] = [];
-    let from = Math.max(0, Number(since ?? 0) - OVERLAP);
+    let pageAfter = -1; // keyset pagination over server_seq inside the (seq OR time-window) filter
     for (;;) {
-      const { data, error } = await sb.from(table).select(cols).eq('profile_id', profileId).gt('server_seq', from).order('server_seq').limit(PAGE);
+      let q = sb.from(table).select(`${cols}, server_seq, changed_at`).eq('profile_id', profileId);
+      q = changedAfter ? q.or(`server_seq.gt.${seq},changed_at.gt."${changedAfter}"`) : q.gt('server_seq', seq);
+      const { data, error } = await q.gt('server_seq', pageAfter).order('server_seq').limit(PAGE);
       if (error) fail(error);
       const page = (data ?? []) as unknown as R[];
       rows.push(...page);
       if (page.length < PAGE) break;
-      from = page[page.length - 1].server_seq;
+      pageAfter = page[page.length - 1].server_seq;
     }
-    const max = rows.reduce((m, r) => Math.max(m, r.server_seq), Number(since ?? 0));
-    return { rows, cursor: max ? String(max) : since };
+    const prevAt = since?.split('|')[1] ?? null;
+    const maxSeq = rows.reduce((m, r) => Math.max(m, Number(r.server_seq)), seq);
+    const maxAt = rows.reduce<string | null>((m, r) => {
+      const at = new Date(r.changed_at).toISOString();
+      return !m || at > m ? at : m;
+    }, prevAt);
+    return { rows, cursor: maxSeq || maxAt ? makeCursor(maxSeq, maxAt) : since };
   }
 
   return {
@@ -94,6 +120,16 @@ export function createSupabaseBackend(url: string, anonKey: string, pairEmail: s
     async isSignedIn() {
       // Never call getSession() here: offline it fails to refresh an expired token and reports "no session".
       return hasStoredSession(localStorage.getItem(STORAGE_KEY));
+    },
+    async recoverSession() {
+      try {
+        const { data, error } = await sb.auth.refreshSession();
+        if (data.session) return true;
+        // network trouble while refreshing is not a reason to drop a valid refresh token
+        return !!error && (isAuthRetryableFetchError(error) || classifyError(error) === 'offline');
+      } catch {
+        return true;
+      }
     },
     async signOut() {
       await sb.auth.signOut({ scope: 'local' });
@@ -128,14 +164,14 @@ export function createSupabaseBackend(url: string, anonKey: string, pairEmail: s
     async pullReviews(profileId, since) {
       const r = await pull<ReviewRow>(
         'reviews',
-        'id, card_id, rating, duration_ms, reviewed_at, local_day, was_new, closes_queue, scheduled_days, answer, server_seq',
+        'id, card_id, rating, duration_ms, reviewed_at, local_day, was_new, closes_queue, scheduled_days, answer',
         profileId,
         since,
       );
       return { rows: r.rows.map(toReview), cursor: r.cursor };
     },
     async pullCards(profileId, since) {
-      const r = await pull<CardRow>('user_cards', 'card_id, word_id, direction, fsrs, updated_at, server_seq', profileId, since);
+      const r = await pull<CardRow>('user_cards', 'card_id, word_id, direction, fsrs, updated_at', profileId, since);
       return { rows: r.rows.map(toCard), cursor: r.cursor };
     },
   };

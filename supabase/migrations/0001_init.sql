@@ -23,15 +23,20 @@ create table public.user_cards (
   fsrs jsonb not null,
   updated_at timestamptz not null,
   server_seq bigint not null default nextval('public.user_cards_seq'),
+  -- server clock at write time; pulls re-read a time window behind the newest change they saw,
+  -- so a transaction that committed late (lower seq) is still picked up
+  changed_at timestamptz not null default clock_timestamp(),
   primary key (profile_id, card_id)
 );
 create index user_cards_seq_idx on public.user_cards (profile_id, server_seq);
+create index user_cards_changed_idx on public.user_cards (profile_id, changed_at);
 
 -- Every insert/update gets a fresh sequence number, so devices can pull "changes since".
 create function public.user_cards_bump_seq() returns trigger
 language plpgsql set search_path = '' as $$
 begin
   new.server_seq := nextval('public.user_cards_seq');
+  new.changed_at := clock_timestamp();
   return new;
 end $$;
 create trigger user_cards_bump_seq before insert or update on public.user_cards
@@ -50,9 +55,11 @@ create table public.reviews (
   scheduled_days real not null default 0,
   answer text,
   server_seq bigint generated always as identity,
+  changed_at timestamptz not null default clock_timestamp(),
   inserted_at timestamptz not null default now()
 );
 create index reviews_seq_idx on public.reviews (profile_id, server_seq);
+create index reviews_changed_idx on public.reviews (profile_id, changed_at);
 
 -- Row Level Security
 alter table public.profiles enable row level security;

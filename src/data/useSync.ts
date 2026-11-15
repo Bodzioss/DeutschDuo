@@ -1,30 +1,63 @@
 import { useEffect } from 'react';
 import { backend, BackendError } from './backend';
+import type { Backend } from './backend/types';
 import { openProfileDb } from './db';
 import { syncProfile } from './sync';
 import { onSessionEnd } from '@/stores/sessionStore';
 
 const INTERVAL_MS = 5 * 60_000;
-let inFlight: Promise<void> | null = null;
+export const SIGNED_OUT_EVENT = 'duo:signed-out';
 
-/** Runs one sync at a time; network errors are logged and retried on the next trigger. */
-export function syncNow(profileId: string): Promise<void> {
-  if (inFlight) return inFlight;
-  inFlight = syncProfile(openProfileDb(profileId), profileId, backend)
-    .then(() => undefined)
-    .catch(async (e) => {
-      console.warn('sync skipped', e);
-      // The server rejected our session (e.g. pair password changed): sign out locally; local progress stays
-      // and will be pushed after the next sign-in. Offline errors never land here as 'unauthorized'.
-      if (e instanceof BackendError && e.code === 'unauthorized') await backend.signOut();
-    })
-    .finally(() => {
-      inFlight = null;
-    });
-  return inFlight;
+/**
+ * One sync at a time per profile. A trigger that arrives while that profile is syncing schedules exactly one
+ * more run afterwards (so reviews made during a sync are not left waiting for the next timer).
+ */
+export function createSyncScheduler(run: (profileId: string) => Promise<void>) {
+  const inFlight = new Map<string, Promise<void>>();
+  const again = new Set<string>();
+
+  const start = (id: string): Promise<void> => {
+    const p = (async () => {
+      do {
+        again.delete(id);
+        await run(id);
+      } while (again.has(id));
+    })().finally(() => inFlight.delete(id));
+    inFlight.set(id, p);
+    return p;
+  };
+
+  return (id: string): Promise<void> => {
+    const cur = inFlight.get(id);
+    if (cur) {
+      again.add(id);
+      return cur;
+    }
+    return start(id);
+  };
 }
 
-/** Background sync for the current profile: on start, after a session, when back online, and every 5 min while visible. */
+/**
+ * Reaction to a failed sync. Only a session the server definitively rejects signs the device out;
+ * offline/transient failures (incl. a token refresh that failed on a flaky network) keep it signed in.
+ */
+export async function handleSyncError(e: unknown, b: Pick<Backend, 'recoverSession' | 'signOut'>): Promise<'kept' | 'signed_out'> {
+  if (!(e instanceof BackendError) || e.code !== 'unauthorized') return 'kept';
+  if (await b.recoverSession()) return 'kept';
+  await b.signOut();
+  return 'signed_out';
+}
+
+export const syncNow = createSyncScheduler(async (profileId) => {
+  try {
+    await syncProfile(openProfileDb(profileId), profileId, backend);
+  } catch (e) {
+    console.warn('sync skipped', e);
+    if ((await handleSyncError(e, backend)) === 'signed_out') window.dispatchEvent(new Event(SIGNED_OUT_EVENT));
+  }
+});
+
+/** Background sync for the current profile: on start, after a session, when back online/visible, and every 5 min. */
 export function useSync(profileId: string | null): void {
   useEffect(() => {
     if (!profileId) return;

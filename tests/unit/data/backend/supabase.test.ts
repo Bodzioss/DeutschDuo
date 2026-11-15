@@ -22,3 +22,23 @@ describe('classifyError', () => {
   });
   test('rate limit is not offline', () => expect(classifyError({ message: 'Request rate limit reached', status: 429 })).toBe('other'));
 });
+
+describe('pull cursor', () => {
+  test('null cursor starts from scratch', async () => {
+    const { parseCursor } = await import('@/data/backend/supabase');
+    expect(parseCursor(null)).toEqual({ seq: 0, changedAfter: null });
+  });
+  test('cursor keeps seq and re-reads rows changed within the safety window before the newest seen change', async () => {
+    const { makeCursor, parseCursor, SAFETY_WINDOW_MS } = await import('@/data/backend/supabase');
+    const c = makeCursor(42, '2026-11-16T10:00:00.000Z');
+    expect(parseCursor(c)).toEqual({
+      seq: 42,
+      changedAfter: new Date(Date.parse('2026-11-16T10:00:00.000Z') - SAFETY_WINDOW_MS).toISOString(),
+    });
+    expect(SAFETY_WINDOW_MS).toBeGreaterThanOrEqual(60_000);
+  });
+  test('legacy numeric cursor still parses', async () => {
+    const { parseCursor } = await import('@/data/backend/supabase');
+    expect(parseCursor('17')).toEqual({ seq: 17, changedAfter: null });
+  });
+});

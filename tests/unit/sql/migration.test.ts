@@ -102,4 +102,15 @@ describe('0001_init.sql', () => {
       as(U1, `insert into reviews (id, profile_id, card_id, rating, duration_ms, reviewed_at, local_day, was_new, server_seq) values (gen_random_uuid(), $1, 'a', 3, 1, now(), '2026-11-16', true, 999999)`, [P1]),
     ).rejects.toThrow();
   });
+
+  test('changed_at is set by the server clock on insert and bumped on update', async () => {
+    const at = async () => ((await as(U1, `select changed_at from user_cards where card_id = 'c:de_en'`)).rows[0] as { changed_at: Date }).changed_at;
+    await as(U1, `select upsert_cards($1, $2::jsonb)`, [P1, JSON.stringify([card('c:de_en', '2026-11-16T10:00:00Z')])]);
+    const t1 = await at();
+    await new Promise((r) => setTimeout(r, 5));
+    await as(U1, `select upsert_cards($1, $2::jsonb)`, [P1, JSON.stringify([card('c:de_en', '2026-11-16T11:00:00Z')])]);
+    expect((await at()).getTime()).toBeGreaterThan(t1.getTime());
+    const r = await as(U1, `select changed_at from reviews limit 1`);
+    expect(r.rows.length === 0 || (r.rows[0] as { changed_at: Date }).changed_at instanceof Date).toBe(true);
+  });
 });

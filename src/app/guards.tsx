@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { backend, backendConfigError } from '@/data/backend';
 import { useProfileStore } from '@/stores/profileStore';
-import { useSync } from '@/data/useSync';
+import { SIGNED_OUT_EVENT, useSync } from '@/data/useSync';
 
 /**
  * Layout route: the device must be signed into the pair account. Mounted once for all guarded routes.
@@ -26,8 +26,12 @@ export function AuthGate() {
         if (alive) setState('out');
       }
     })();
+    // The server rejected this device's session during sync: back to the pair password (local progress stays).
+    const onSignedOut = () => alive && setState('out');
+    window.addEventListener(SIGNED_OUT_EVENT, onSignedOut);
     return () => {
       alive = false;
+      window.removeEventListener(SIGNED_OUT_EVENT, onSignedOut);
     };
   }, [loadLocal, refresh]);
 

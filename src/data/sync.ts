@@ -2,10 +2,7 @@ import type { CardRecord, ReviewRecord } from '@/domain/types';
 import type { Backend, Cursor } from './backend/types';
 import { getMeta, setMeta, type DuoDB } from './db';
 
-/**
- * Push batch size. Must stay well below the Supabase backend's pull OVERLAP (200): a transaction
- * that commits late can only hide as many sequence numbers as it allocated.
- */
+/** Push batch size (keeps each request small on mobile networks). Pull correctness does not depend on it. */
 export const BATCH = 100;
 
 /** Card to store locally after seeing `remote`, or null when the local copy is newer or equal (last write wins). */

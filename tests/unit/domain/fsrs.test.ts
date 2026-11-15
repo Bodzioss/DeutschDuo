@@ -42,3 +42,12 @@ describe('fsrs', () => {
     expect(a.fsrs.due).toBe(b.fsrs.due);
   });
 });
+
+describe('updatedAt is monotonic per card', () => {
+  test('rating with a clock behind the last write still produces a newer updatedAt', () => {
+    const c = rateCard(newCard('x', 'de_en', now), 3, new Date(now.getTime() + 10 * 60_000)); // written by a fast clock
+    const behind = new Date(now.getTime() + 5 * 60_000);
+    const next = rateCard(c, 3, behind);
+    expect(next.updatedAt > c.updatedAt).toBe(true);
+  });
+});

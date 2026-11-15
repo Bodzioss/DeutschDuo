@@ -67,3 +67,11 @@ describe('previewRating', () => {
     expect(preview.fsrs.due).toBe(card.fsrs.due);
   });
 });
+
+describe('unlocked en_de card', () => {
+  test('has the minimal updatedAt so any real review on another device wins', async () => {
+    const { unlocked } = await recordReview(db, { item, grade: 3, durationMs: 1, now, closesQueue: false });
+    expect(unlocked!.updatedAt).toBe(new Date(0).toISOString());
+    expect(unlocked!.dirty).toBe(1);
+  });
+});

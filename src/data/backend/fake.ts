@@ -44,6 +44,9 @@ export function createFakeBackend(): Backend {
     async isSignedIn() {
       return localStorage.getItem(SESSION_KEY) === '1';
     },
+    async recoverSession() {
+      return localStorage.getItem(SESSION_KEY) === '1';
+    },
     async signOut() {
       localStorage.removeItem(SESSION_KEY);
     },

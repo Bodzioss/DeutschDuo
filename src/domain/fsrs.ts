@@ -34,5 +34,8 @@ export function newCard(wordId: string, direction: Direction, now: Date, dueAt?:
 
 export function rateCard(card: CardRecord, grade: Grade, now: Date): CardRecord {
   const { card: next } = scheduler.next(toFsrs(card.fsrs), now, grade as FsrsGrade);
-  return { ...card, fsrs: fromFsrs(next), updatedAt: now.toISOString(), dirty: 1 };
+  // Monotonic per card: a device whose clock is behind the last write must still produce a newer version.
+  const prev = new Date(card.updatedAt).getTime();
+  const stamp = now.getTime() >= prev ? now : new Date(prev + 1);
+  return { ...card, fsrs: fromFsrs(next), updatedAt: stamp.toISOString(), dirty: 1 };
 }
