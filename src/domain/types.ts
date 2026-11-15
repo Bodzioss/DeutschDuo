@@ -28,7 +28,6 @@ export interface FsrsState {
   due: string;
   stability: number;
   difficulty: number;
-  elapsed_days: number;
   scheduled_days: number;
   reps: number;
   lapses: number;
