@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useCurrentProfile } from '@/stores/profileStore';
-import { useSessionStore } from '@/stores/sessionStore';
+import { isResumable, useSessionStore } from '@/stores/sessionStore';
 import { Button } from '@/ui/Button';
 import { ProgressBar } from '@/ui/ProgressBar';
 import { useToday } from './useToday';
@@ -9,10 +9,10 @@ export function TodayScreen() {
   const profile = useCurrentProfile();
   const t = useToday(profile);
   const navigate = useNavigate();
-  const inProgress = useSessionStore((s) => s.profileId === profile?.id && !s.done && s.index > 0);
+  const inProgress = useSessionStore((s) => !!profile && s.index > 0 && isResumable(s, profile.id, new Date()));
 
   if (!profile || !t) return null;
-  const empty = t.dueCount + t.newCount === 0;
+  const waitMin = t.nextDueAt ? Math.max(1, Math.ceil((Date.parse(t.nextDueAt) - Date.now()) / 60_000)) : null;
   const minutes = Math.floor(t.minutesToday);
 
   return (
@@ -54,8 +54,13 @@ export function TodayScreen() {
         </div>
       </section>
 
-      {empty ? (
+      {t.status === 'done' && !inProgress ? (
         <p className="rounded-2xl bg-das/10 p-6 text-center text-lg font-semibold text-das">Na dziś wszystko ✓</p>
+      ) : t.status === 'wait' && !inProgress ? (
+        <p className="rounded-2xl bg-amber-500/10 p-6 text-center text-amber-700 dark:text-amber-300">
+          Cel jeszcze nie zaliczony.{' '}
+          {waitMin ? `Kilka kart wróci za ${waitMin} min — wtedy dokończ sesję.` : `Zostało ${Math.max(0, t.goalMin - minutes)} min nauki.`}
+        </p>
       ) : (
         <Button className="w-full py-5 text-xl" onClick={() => navigate('/review')}>
           {inProgress ? 'Kontynuuj' : 'Start'}

@@ -1,4 +1,8 @@
+import { useRef } from 'react';
 import type { Grade } from '@/domain/types';
+
+/** Taps this soon after the bar appears are ignored (a double tap on "Pokaż" must not rate the card). */
+const TAP_GUARD_MS = 350;
 
 const GRADES: { g: Grade; label: string; cls: string }[] = [
   { g: 1, label: 'Nie pamiętam', cls: 'bg-die/15 text-die' },
@@ -8,13 +12,14 @@ const GRADES: { g: Grade; label: string; cls: string }[] = [
 ];
 
 export function RatingBar({ onRate, suggested }: { onRate: (g: Grade) => void; suggested?: Grade | null }) {
+  const shownAt = useRef(Date.now());
   return (
     <div className="grid grid-cols-4 gap-2">
       {GRADES.map(({ g, label, cls }) => (
         <button
           key={g}
           type="button"
-          onClick={() => onRate(g)}
+          onClick={() => Date.now() - shownAt.current >= TAP_GUARD_MS && onRate(g)}
           className={`rounded-xl px-1 py-3 text-xs font-semibold active:scale-95 ${cls} ${suggested === g ? 'ring-2 ring-current' : ''}`}
         >
           {label}

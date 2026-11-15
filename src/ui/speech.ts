@@ -17,7 +17,8 @@ export function speak(text: string): void {
   u.lang = 'de-DE';
   u.rate = 0.9;
   const v = germanVoice();
-  if (v) u.voice = v;
+  if (!v) return; // no German voice: a foreign voice would teach wrong pronunciation
+  u.voice = v;
   s.speak(u);
 }
 

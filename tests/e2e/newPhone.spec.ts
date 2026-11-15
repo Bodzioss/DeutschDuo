@@ -6,6 +6,7 @@ test('new phone: progress comes back from the cloud after password + profile', a
   await page.getByRole('button', { name: 'Start' }).click();
   for (let i = 0; i < 4; i++) {
     await page.getByRole('button', { name: 'Pokaż' }).click();
+    await page.waitForTimeout(400); // RatingBar ignores taps right after reveal
     await page.getByRole('button', { name: 'Łatwe' }).click();
   }
   await page.getByRole('link', { name: /Przerwij/ }).click();

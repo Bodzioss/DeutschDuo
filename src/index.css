@@ -31,3 +31,5 @@ body {
   -webkit-tap-highlight-color: transparent;
   overflow-x: hidden;
 }
+
+button, a, input { touch-action: manipulation; }

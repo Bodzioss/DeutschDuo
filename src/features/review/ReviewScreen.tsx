@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useSessionStore } from '@/stores/sessionStore';
+import { isResumable, useSessionStore } from '@/stores/sessionStore';
 import { useCurrentProfile } from '@/stores/profileStore';
 import { getWord } from '@/data/words';
 import { ProgressBar } from '@/ui/ProgressBar';
@@ -11,11 +11,11 @@ import { EnDeCard } from './EnDeCard';
 export function ReviewScreen() {
   const profile = useCurrentProfile();
   const navigate = useNavigate();
-  const { queue, index, done, profileId, start, answer } = useSessionStore();
+  const { queue, index, done, start, answer } = useSessionStore();
 
   useEffect(() => {
-    // Start (or rebuild) the session when entering for this profile or after a finished one.
-    if (profile && (profileId !== profile.id || done)) void start(profile);
+    // Resume only a same-day, same-profile, unfinished session; otherwise build today's queue.
+    if (profile && !isResumable(useSessionStore.getState(), profile.id, new Date())) void start(profile);
   }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!profile) return null;

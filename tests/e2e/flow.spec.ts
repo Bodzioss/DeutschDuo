@@ -5,6 +5,7 @@ async function studyNewCards(page: Page, n: number) {
   await page.getByRole('button', { name: 'Start' }).click();
   for (let i = 0; i < n; i++) {
     await page.getByRole('button', { name: 'Pokaż' }).click();
+    await page.waitForTimeout(400); // RatingBar ignores taps right after reveal
     await page.getByRole('button', { name: 'Łatwe' }).click(); // Easy: graduates, not requeued
   }
 }

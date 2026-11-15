@@ -42,3 +42,19 @@ describe('computeToday', () => {
     expect(t.freezes).toBe(1);
   });
 });
+
+describe('computeToday status', () => {
+  test('nothing due but goal not met and cards due later → wait (not "all done")', () => {
+    const soon = newCard('a', 'de_en', now, new Date(now.getTime() + 8 * 60_000));
+    const t = computeToday({ cards: [{ ...soon, fsrs: { ...soon.fsrs, reps: 1 } }], reviews: [rev(now)], words: [], profile, now });
+    expect(t.status).toBe('wait');
+    expect(t.nextDueAt).toBe(soon.fsrs.due);
+  });
+  test('goal met and nothing due → done', () => {
+    const t = computeToday({ cards: [], reviews: [rev(now, { closesQueue: true })], words: [], profile, now });
+    expect(t.status).toBe('done');
+  });
+  test('cards due → start', () => {
+    expect(computeToday({ cards: [dueCard('a')], reviews: [], words, profile, now }).status).toBe('start');
+  });
+});

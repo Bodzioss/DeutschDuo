@@ -7,6 +7,7 @@ import { loadAll, previewRating, recordReview } from '@/data/repo';
 import { getWords } from '@/data/words';
 
 export const MAX_CARD_MS = 60_000;
+let answering = false;
 
 type Listener = () => void;
 const endListeners = new Set<Listener>();
@@ -24,6 +25,8 @@ export function onReviewRecorded(fn: Listener): () => void {
 
 interface SessionState {
   profileId: string | null;
+  /** Learning day the queue was built for; a queue from another day must be rebuilt, never resumed. */
+  builtForDay: string | null;
   queue: SessionItem[];
   index: number;
   shownAt: number | null;
@@ -35,6 +38,7 @@ interface SessionState {
 
 export const useSessionStore = create<SessionState>((set, get) => ({
   profileId: null,
+  builtForDay: null,
   queue: [],
   index: 0,
   shownAt: null,
@@ -52,13 +56,15 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       now,
       newPerDay: profile.newPerDay,
     });
-    set({ profileId: profile.id, queue, index: 0, shownAt: Date.now(), done: queue.length === 0 });
+    set({ profileId: profile.id, builtForDay: today, queue, index: 0, shownAt: Date.now(), done: queue.length === 0 });
   },
 
   async answer(grade, answer) {
     const { profileId, queue, index, shownAt } = get();
     const item = queue[index];
-    if (!profileId || !item) return;
+    if (!profileId || !item || answering) return; // double-tap guard
+    answering = true;
+    try {
     const now = new Date();
     const durationMs = Math.min(MAX_CARD_MS, Math.max(0, Date.now() - (shownAt ?? Date.now())));
     const isLast = index === queue.length - 1;
@@ -74,9 +80,17 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const done = index + 1 >= nextQueue.length;
     set({ queue: nextQueue, index: index + 1, shownAt: Date.now(), done });
     if (done) endListeners.forEach((fn) => fn());
+    } finally {
+      answering = false;
+    }
   },
 
   reset() {
-    set({ profileId: null, queue: [], index: 0, shownAt: null, done: false });
+    set({ profileId: null, builtForDay: null, queue: [], index: 0, shownAt: null, done: false });
   },
 }));
+
+/** A session may be continued only for the same profile, on the same learning day, with cards left. */
+export function isResumable(s: Pick<SessionState, 'profileId' | 'builtForDay' | 'done' | 'queue' | 'index'>, profileId: string, now: Date): boolean {
+  return s.profileId === profileId && s.builtForDay === localDay(now) && !s.done && s.index < s.queue.length;
+}

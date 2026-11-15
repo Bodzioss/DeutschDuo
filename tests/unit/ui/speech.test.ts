@@ -37,3 +37,11 @@ describe('speech', () => {
     expect(fn.mock.calls[0][0].lang).toBe('de-DE');
   });
 });
+
+describe('speak without a German voice', () => {
+  test('does not speak at all (would read German with a foreign voice)', () => {
+    const fn = mockSynth([{ lang: 'pl-PL' }, { lang: 'en-US' }]);
+    speak('Hallo');
+    expect(fn).not.toHaveBeenCalled();
+  });
+});

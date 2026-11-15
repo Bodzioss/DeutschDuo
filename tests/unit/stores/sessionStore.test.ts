@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, test } from 'vitest';
+import { isResumable } from '@/stores/sessionStore';
+import { localDay } from '@/domain/day';
 import { useSessionStore } from '@/stores/sessionStore';
 import { openProfileDb } from '@/data/db';
 import type { Profile } from '@/domain/types';
@@ -56,5 +58,23 @@ describe('sessionStore writes', () => {
     await useSessionStore.getState().answer(4);
     await useSessionStore.getState().answer(4);
     expect(updates).toEqual([]);
+  });
+});
+
+describe('double tap guard', () => {
+  test('two concurrent answer() calls record only one review', async () => {
+    await Promise.all([useSessionStore.getState().answer(4), useSessionStore.getState().answer(4)]);
+    expect(await openProfileDb(profile.id).reviews.count()).toBe(1);
+    expect(useSessionStore.getState().index).toBe(1);
+  });
+});
+
+describe('session day stamp', () => {
+  test('start stamps the learning day the queue was built for', () => {
+    expect(useSessionStore.getState().builtForDay).toBe(localDay(new Date()));
+  });
+  test('isResumable is false for a queue built on another day', () => {
+    useSessionStore.setState({ builtForDay: '2000-01-01', index: 1 });
+    expect(isResumable(useSessionStore.getState(), profile.id, new Date())).toBe(false);
   });
 });
