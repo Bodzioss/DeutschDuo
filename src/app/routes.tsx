@@ -1,6 +1,7 @@
 import { createBrowserRouter } from 'react-router-dom';
 import { Layout } from './Layout';
 import { ReviewScreen } from '@/features/review/ReviewScreen';
+import { TodayScreen } from '@/features/today/TodayScreen';
 
 const Placeholder = ({ title }: { title: string }) => <h1 className="text-2xl font-semibold">{title}</h1>;
 
@@ -11,7 +12,7 @@ export const router = createBrowserRouter([
   {
     element: <Layout />,
     children: [
-      { path: '/', element: <Placeholder title="Heute" /> },
+      { path: '/', element: <TodayScreen /> },
       { path: '/words', element: <Placeholder title="Słowa" /> },
       { path: '/words/:id', element: <Placeholder title="Słowo" /> },
       { path: '/stats', element: <Placeholder title="Statystyki" /> },
