@@ -1,0 +1,12 @@
+[
+  { "id": "hallo", "de": "hallo", "pos": "phrase", "en": "hello", "pl": "cześć", "cefr": "A1", "topic": "basics", "example_de": "Hallo, wie geht's?", "example_en": "Hello, how are you?", "emoji": "👋" },
+  { "id": "danke", "de": "danke", "pos": "phrase", "en": "thank you; thanks", "pl": "dziękuję", "cefr": "A1", "topic": "basics", "example_de": "Danke für das Essen!", "example_en": "Thanks for the food!", "emoji": "🙏" },
+  { "id": "bitte", "de": "bitte", "pos": "phrase", "en": "please; you're welcome", "pl": "proszę", "cefr": "A1", "topic": "basics", "example_de": "Einen Kaffee, bitte.", "example_en": "A coffee, please." },
+  { "id": "ja", "de": "ja", "pos": "adv", "en": "yes", "pl": "tak", "cefr": "A1", "topic": "basics", "example_de": "Ja, das ist gut.", "example_en": "Yes, that is good." },
+  { "id": "nein", "de": "nein", "pos": "adv", "en": "no", "pl": "nie", "cefr": "A1", "topic": "basics", "example_de": "Nein, danke.", "example_en": "No, thank you." },
+  { "id": "der-tisch", "de": "Tisch", "article": "der", "plural": "Tische", "pos": "noun", "en": "table", "pl": "stół", "cefr": "A1", "topic": "basics", "example_de": "Der Tisch ist groß.", "example_en": "The table is big.", "emoji": "🪑" },
+  { "id": "die-frau", "de": "Frau", "article": "die", "plural": "Frauen", "pos": "noun", "en": "woman; wife; Mrs", "pl": "kobieta; żona; pani", "cefr": "A1", "topic": "basics", "example_de": "Die Frau heißt Anna.", "example_en": "The woman is called Anna.", "emoji": "👩" },
+  { "id": "das-haus", "de": "Haus", "article": "das", "plural": "Häuser", "pos": "noun", "en": "house", "pl": "dom", "cefr": "A1", "topic": "basics", "example_de": "Das Haus ist alt.", "example_en": "The house is old.", "emoji": "🏠" },
+  { "id": "sein", "de": "sein", "pos": "verb", "en": "to be", "pl": "być", "cefr": "A1", "topic": "basics", "example_de": "Ich bin müde.", "example_en": "I am tired." },
+  { "id": "haben", "de": "haben", "pos": "verb", "en": "to have", "pl": "mieć", "cefr": "A1", "topic": "basics", "example_de": "Wir haben Zeit.", "example_en": "We have time." }
+]
