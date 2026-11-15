@@ -45,3 +45,16 @@ describe('sessionStore', () => {
     expect(useSessionStore.getState().queue).toHaveLength(1);
   });
 });
+
+describe('sessionStore writes', () => {
+  test('closesQueue is part of the original review write (never patched afterwards)', async () => {
+    const db = openProfileDb(profile.id);
+    const updates: unknown[] = [];
+    db.reviews.hook('updating', (mods) => {
+      updates.push(mods);
+    });
+    await useSessionStore.getState().answer(4);
+    await useSessionStore.getState().answer(4);
+    expect(updates).toEqual([]);
+  });
+});

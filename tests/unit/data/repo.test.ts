@@ -57,3 +57,13 @@ describe('recordReview', () => {
     await deleteProfileDb('iso-b');
   });
 });
+
+describe('previewRating', () => {
+  test('returns the card recordReview will store, without writing anything', async () => {
+    const { previewRating } = await import('@/data/repo');
+    const preview = await previewRating(db, item, 3, now);
+    expect(await db.cards.count()).toBe(0);
+    const { card } = await recordReview(db, { item, grade: 3, durationMs: 1, now, closesQueue: false });
+    expect(preview.fsrs.due).toBe(card.fsrs.due);
+  });
+});

@@ -3,7 +3,7 @@ import { buildSession, shouldRequeue, type SessionItem } from '@/domain/sessionB
 import { localDay } from '@/domain/day';
 import type { Grade, Profile } from '@/domain/types';
 import { openProfileDb } from '@/data/db';
-import { loadAll, recordReview } from '@/data/repo';
+import { loadAll, previewRating, recordReview } from '@/data/repo';
 import { getWords } from '@/data/words';
 
 export const MAX_CARD_MS = 60_000;
@@ -57,11 +57,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const durationMs = Math.min(MAX_CARD_MS, Math.max(0, Date.now() - (shownAt ?? Date.now())));
     const isLast = index === queue.length - 1;
 
-    // Rate first, then decide whether the card returns; closesQueue only if it does not.
+    // Decide requeue before writing, so closesQueue is part of the single review write
+    // (a patch afterwards could race with a background sync that already pushed the review).
     const db = openProfileDb(profileId);
-    const preview = await recordReview(db, { item, grade, durationMs, answer, now, closesQueue: false });
-    const requeue = shouldRequeue(preview.card, now);
-    if (isLast && !requeue) await db.reviews.update(preview.review.id, { closesQueue: true });
+    const requeue = shouldRequeue(await previewRating(db, item, grade, now), now);
+    await recordReview(db, { item, grade, durationMs, answer, now, closesQueue: isLast && !requeue });
 
     const nextQueue = requeue ? [...queue, { ...item, isNew: false }] : queue;
     const done = index + 1 >= nextQueue.length;

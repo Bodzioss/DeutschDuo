@@ -43,6 +43,12 @@ export async function recordReview(
   });
 }
 
+/** The card as it would be after rating it now — without writing anything. */
+export async function previewRating(db: DuoDB, item: SessionItem, grade: Grade, now: Date): Promise<CardRecord> {
+  const existing = (await db.cards.get(item.cardId)) ?? newCard(item.wordId, item.direction, now);
+  return rateCard(existing, grade, now);
+}
+
 export async function loadAll(db: DuoDB): Promise<{ cards: CardRecord[]; reviews: ReviewRecord[] }> {
   const [cards, reviews] = await Promise.all([db.cards.toArray(), db.reviews.toArray()]);
   return { cards, reviews };
