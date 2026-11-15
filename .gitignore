@@ -1,0 +1,10 @@
+node_modules
+dist
+dev-dist
+.env
+.env.local
+data/vocab/raw/
+test-results
+playwright-report
+.superpowers/
+*.log
