@@ -24,3 +24,7 @@ Verdict: **With fixes**. 0 Critical. The domain, sync and data layers are solid.
 - PostgREST quoted-timestamp `or()` filter is unverified against live Supabase → check in SETUP §5.
 - vite-plugin-pwa autoUpdate mid-session, iOS speech autoplay, iOS keyboard → needs a real-device pass.
 - Requeue pedagogy (two passes per new word), knownOverTime vs "znane słowa" definitions → accepted as is.
+
+## Marcin's feedback after the first run (2026-11-16) — for later
+- Looks good on a phone, mediocre in a desktop browser → responsive desktop layout.
+- Too similar to Duolingo → its own visual identity (to be designed together).
