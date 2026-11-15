@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet } from 'react-router-dom';
+import { useCurrentProfile } from '@/stores/profileStore';
 
 const tabs = [
   { to: '/', label: 'Heute', icon: '☀️', end: true },
@@ -8,9 +9,19 @@ const tabs = [
 ];
 
 export function Layout() {
+  const profile = useCurrentProfile();
   return (
     <div className="mx-auto flex min-h-full max-w-[480px] flex-col">
-      <main className="flex-1 px-4 pb-24 pt-[max(1rem,env(safe-area-inset-top))]">
+      <main className="relative flex-1 px-4 pb-24 pt-[max(1rem,env(safe-area-inset-top))]">
+        {profile && (
+          <Link
+            to="/who"
+            aria-label={`Profil: ${profile.displayName}. Zmień profil`}
+            className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] flex h-9 w-9 items-center justify-center rounded-full bg-accent/15 font-bold text-accent"
+          >
+            {profile.displayName.slice(0, 1)}
+          </Link>
+        )}
         <Outlet />
       </main>
       <nav
