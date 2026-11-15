@@ -28,17 +28,40 @@ const toReview = (r: ReviewRow): ReviewRecord => {
   return out;
 };
 
-function fail(e: { message?: string; status?: number } | null | undefined): never {
+const STORAGE_KEY = 'duo-auth';
+
+/** True when a refreshable session is stored on the device. Purely local: never refreshes, so it works offline. */
+export function hasStoredSession(raw: string | null): boolean {
+  if (!raw) return false;
+  try {
+    const s = JSON.parse(raw);
+    return typeof s?.refresh_token === 'string' && s.refresh_token.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+type ErrLike = { message?: string; status?: number; code?: string } | null | undefined;
+
+export function classifyError(e: ErrLike): 'bad_password' | 'offline' | 'unauthorized' | 'other' {
   const msg = e?.message ?? '';
-  if (/invalid login credentials/i.test(msg)) throw new BackendError('bad_password');
-  if (/fetch|network|load failed/i.test(msg) || e?.status === 0) throw new BackendError('offline');
-  if (e?.status === 401 || /jwt/i.test(msg)) throw new BackendError('unauthorized');
-  throw new Error(msg || 'backend error');
+  if (/invalid login credentials/i.test(msg)) return 'bad_password';
+  if (/failed to fetch|networkerror|network request failed|load failed/i.test(msg) || e?.status === 0) return 'offline';
+  if (e?.code === '42501' || e?.code === 'PGRST301' || e?.code === 'PGRST303' || e?.status === 401 || /permission denied|jwt/i.test(msg)) {
+    return 'unauthorized';
+  }
+  return 'other';
+}
+
+function fail(e: ErrLike): never {
+  const kind = classifyError(e);
+  if (kind === 'other') throw new Error(e?.message || 'backend error');
+  throw new BackendError(kind);
 }
 
 export function createSupabaseBackend(url: string, anonKey: string, pairEmail: string): Backend {
   const sb: SupabaseClient = createClient(url, anonKey, {
-    auth: { persistSession: true, autoRefreshToken: true, storageKey: 'duo-auth' },
+    auth: { persistSession: true, autoRefreshToken: true, storageKey: STORAGE_KEY },
   });
 
   async function pull<R extends { server_seq: number }>(table: string, cols: string, profileId: string, since: Cursor) {
@@ -58,17 +81,19 @@ export function createSupabaseBackend(url: string, anonKey: string, pairEmail: s
 
   return {
     async signIn(password) {
+      let res;
       try {
-        const { error } = await sb.auth.signInWithPassword({ email: pairEmail, password });
-        if (error) fail(error);
+        res = await sb.auth.signInWithPassword({ email: pairEmail, password });
       } catch (e) {
-        if (e instanceof BackendError) throw e;
-        throw new BackendError('offline');
+        // fetch itself threw: no network
+        if (e instanceof TypeError) throw new BackendError('offline');
+        throw e;
       }
+      if (res.error) fail(res.error);
     },
     async isSignedIn() {
-      const { data } = await sb.auth.getSession();
-      return !!data.session;
+      // Never call getSession() here: offline it fails to refresh an expired token and reports "no session".
+      return hasStoredSession(localStorage.getItem(STORAGE_KEY));
     },
     async signOut() {
       await sb.auth.signOut({ scope: 'local' });

@@ -20,6 +20,9 @@ interface ProfileState {
   clear(): Promise<void>;
 }
 
+/** When each profile was last edited on this device (guards against an older in-flight fetch). */
+const editedAt = new Map<string, number>();
+
 async function dirtyIds(): Promise<string[]> {
   return ((await globalDb.settings.get(DIRTY_KEY))?.value as string[] | undefined) ?? [];
 }
@@ -37,13 +40,22 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
   async refresh() {
     try {
-      const dirty = await dirtyIds();
-      for (const id of dirty) {
+      for (const id of await dirtyIds()) {
         const p = get().profiles.find((x) => x.id === id);
-        if (p) await backend.updateProfile(p);
+        if (!p) continue;
+        await backend.updateProfile(p);
+        // remove only what was pushed, and only if it did not change meanwhile
+        if (get().profiles.find((x) => x.id === id) === p) {
+          await globalDb.settings.put({ key: DIRTY_KEY, value: (await dirtyIds()).filter((d) => d !== id) });
+        }
       }
-      await globalDb.settings.put({ key: DIRTY_KEY, value: [] });
-      await get().setProfiles(await backend.fetchProfiles());
+      const fetchStarted = Date.now();
+      const server = await backend.fetchProfiles();
+      // local edits not yet confirmed by the server, or made while fetching, win over the fetched copy
+      const dirty = new Set(await dirtyIds());
+      const local = new Map(get().profiles.map((p) => [p.id, p]));
+      const keepLocal = (id: string) => local.has(id) && (dirty.has(id) || (editedAt.get(id) ?? 0) >= fetchStarted);
+      await get().setProfiles(server.map((p) => (keepLocal(p.id) ? local.get(p.id)! : p)));
     } catch (e) {
       console.warn('profile refresh skipped', e);
     }
@@ -58,6 +70,7 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   },
 
   async updateProfile(p) {
+    editedAt.set(p.id, Date.now());
     await globalDb.profiles.put(p);
     set((s) => ({ profiles: s.profiles.map((x) => (x.id === p.id ? p : x)) }));
     try {

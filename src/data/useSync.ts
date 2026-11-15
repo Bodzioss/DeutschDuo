@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { backend } from './backend';
+import { backend, BackendError } from './backend';
 import { openProfileDb } from './db';
 import { syncProfile } from './sync';
 import { onSessionEnd } from '@/stores/sessionStore';
@@ -12,7 +12,12 @@ export function syncNow(profileId: string): Promise<void> {
   if (inFlight) return inFlight;
   inFlight = syncProfile(openProfileDb(profileId), profileId, backend)
     .then(() => undefined)
-    .catch((e) => console.warn('sync skipped', e))
+    .catch(async (e) => {
+      console.warn('sync skipped', e);
+      // The server rejected our session (e.g. pair password changed): sign out locally; local progress stays
+      // and will be pushed after the next sign-in. Offline errors never land here as 'unauthorized'.
+      if (e instanceof BackendError && e.code === 'unauthorized') await backend.signOut();
+    })
     .finally(() => {
       inFlight = null;
     });

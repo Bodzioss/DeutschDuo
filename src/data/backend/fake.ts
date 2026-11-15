@@ -23,8 +23,10 @@ function load(): Cloud {
   return raw ? JSON.parse(raw) : { seq: 0, profiles: DEFAULT_PROFILES, cards: {}, reviews: {} };
 }
 const save = (c: Cloud) => localStorage.setItem(CLOUD_KEY, JSON.stringify(c));
-const toCursor = (n: number) => String(n).padStart(12, '0');
-const fromCursor = (c: Cursor) => (c ? Number(c) : 0);
+const toCursor = (n: number) => String(n);
+/** Like the Supabase backend, re-deliver a few rows behind the cursor so callers must merge idempotently. */
+const OVERLAP = 3;
+const fromCursor = (c: Cursor) => (c ? Math.max(0, Number(c) - OVERLAP) : 0);
 
 export function createFakeBackend(): Backend {
   const online = () => typeof navigator === 'undefined' || navigator.onLine !== false;
@@ -76,13 +78,13 @@ export function createFakeBackend(): Backend {
       guard();
       const c = load();
       const rows = Object.values(c.reviews[profileId] ?? {}).filter((x) => x.seq > fromCursor(since)).sort((a, b) => a.seq - b.seq);
-      return { rows: rows.map((x) => x.review), cursor: rows.length ? toCursor(rows[rows.length - 1].seq) : since };
+      return { rows: rows.map((x) => x.review), cursor: rows.length ? toCursor(Math.max(Number(since ?? 0), rows[rows.length - 1].seq)) : since };
     },
     async pullCards(profileId, since) {
       guard();
       const c = load();
       const rows = Object.values(c.cards[profileId] ?? {}).filter((x) => x.seq > fromCursor(since)).sort((a, b) => a.seq - b.seq);
-      return { rows: rows.map((x) => x.card), cursor: rows.length ? toCursor(rows[rows.length - 1].seq) : since };
+      return { rows: rows.map((x) => x.card), cursor: rows.length ? toCursor(Math.max(Number(since ?? 0), rows[rows.length - 1].seq)) : since };
     },
   };
 }

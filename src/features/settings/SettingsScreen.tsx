@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCurrentProfile, useProfileStore } from '@/stores/profileStore';
 import { useSessionStore } from '@/stores/sessionStore';
@@ -45,15 +45,23 @@ export function SettingsScreen() {
   const resetSession = useSessionStore((s) => s.reset);
   const navigate = useNavigate();
   const [theme, setTheme] = useState<Theme>(getTheme());
+  const [newPerDay, setNewPerDay] = useState<number | null>(null);
+
+  // Debounce the slider: one backend write after the finger stops, not one per tick.
+  useEffect(() => {
+    if (!profile || newPerDay === null || newPerDay === profile.newPerDay) return;
+    const t = setTimeout(() => void updateProfile({ ...profile, newPerDay }), 400);
+    return () => clearTimeout(t);
+  }, [newPerDay, profile, updateProfile]);
 
   if (!profile) return null;
 
   const signOut = async () => {
     if (!confirm('Wylogować to urządzenie? Postęp zostaje w chmurze i na telefonie.')) return;
-    resetSession();
-    await clear();
     await backend.signOut();
+    resetSession();
     navigate('/setup', { replace: true });
+    await clear();
   };
 
   return (
@@ -63,14 +71,14 @@ export function SettingsScreen() {
         <Row label="Cel dzienny">
           <Segmented value={profile.dailyGoalMin} options={GOALS.map((g) => ({ v: g, label: `${g} min` }))} onChange={(v) => updateProfile({ ...profile, dailyGoalMin: v })} />
         </Row>
-        <Row label={`Nowe słowa dziennie: ${profile.newPerDay}`}>
+        <Row label={`Nowe słowa dziennie: ${newPerDay ?? profile.newPerDay}`}>
           <input
             type="range"
             min={5}
             max={20}
-            value={profile.newPerDay}
+            value={newPerDay ?? profile.newPerDay}
             aria-label="Nowe słowa dziennie"
-            onChange={(e) => updateProfile({ ...profile, newPerDay: Number(e.target.value) })}
+            onChange={(e) => setNewPerDay(Number(e.target.value))}
             className="w-full accent-[rgb(var(--accent))]"
           />
         </Row>

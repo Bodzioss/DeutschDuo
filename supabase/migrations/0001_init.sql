@@ -29,7 +29,7 @@ create index user_cards_seq_idx on public.user_cards (profile_id, server_seq);
 
 -- Every insert/update gets a fresh sequence number, so devices can pull "changes since".
 create function public.user_cards_bump_seq() returns trigger
-language plpgsql as $$
+language plpgsql set search_path = '' as $$
 begin
   new.server_seq := nextval('public.user_cards_seq');
   return new;
@@ -49,7 +49,7 @@ create table public.reviews (
   closes_queue boolean not null default false,
   scheduled_days real not null default 0,
   answer text,
-  server_seq bigserial not null,
+  server_seq bigint generated always as identity,
   inserted_at timestamptz not null default now()
 );
 create index reviews_seq_idx on public.reviews (profile_id, server_seq);
@@ -59,8 +59,11 @@ alter table public.profiles enable row level security;
 alter table public.user_cards enable row level security;
 alter table public.reviews enable row level security;
 
-create policy profiles_owner on public.profiles
-  for all using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+-- Profiles are created by the admin (SETUP.md); the app may only read and edit settings. No delete (would cascade progress).
+create policy profiles_select on public.profiles
+  for select using (owner_id = auth.uid());
+create policy profiles_update on public.profiles
+  for update using (owner_id = auth.uid()) with check (owner_id = auth.uid());
 
 create policy user_cards_owner on public.user_cards
   for all using (exists (select 1 from public.profiles p where p.id = profile_id and p.owner_id = auth.uid()))
@@ -74,11 +77,14 @@ create policy reviews_insert on public.reviews
 
 -- Last-write-wins upsert of cards: a row is only replaced by a newer updated_at.
 -- security invoker => RLS of the caller applies.
+-- Duplicates of one card in a batch are collapsed to the newest (ON CONFLICT cannot touch a row twice).
 create function public.upsert_cards(p_profile uuid, p_cards jsonb) returns void
-language sql security invoker as $$
+language sql security invoker set search_path = '' as $$
   insert into public.user_cards (profile_id, card_id, word_id, direction, fsrs, updated_at)
-  select p_profile, c->>'card_id', c->>'word_id', c->>'direction', c->'fsrs', (c->>'updated_at')::timestamptz
+  select distinct on (c->>'card_id')
+         p_profile, c->>'card_id', c->>'word_id', c->>'direction', c->'fsrs', (c->>'updated_at')::timestamptz
   from jsonb_array_elements(p_cards) as c
+  order by c->>'card_id', (c->>'updated_at')::timestamptz desc
   on conflict (profile_id, card_id) do update
     set word_id = excluded.word_id,
         direction = excluded.direction,
@@ -87,5 +93,11 @@ language sql security invoker as $$
     where public.user_cards.updated_at < excluded.updated_at;
 $$;
 
-grant execute on function public.upsert_cards(uuid, jsonb) to authenticated;
+-- Explicit privileges (do not rely on project default privileges).
 revoke all on public.profiles, public.user_cards, public.reviews from anon;
+revoke execute on function public.upsert_cards(uuid, jsonb) from public, anon;
+grant execute on function public.upsert_cards(uuid, jsonb) to authenticated;
+grant select, update on public.profiles to authenticated;
+grant select, insert, update on public.user_cards to authenticated;
+grant select, insert on public.reviews to authenticated;
+grant usage on sequence public.user_cards_seq to authenticated;

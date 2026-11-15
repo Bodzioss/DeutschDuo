@@ -55,8 +55,11 @@ describe('fake backend', () => {
     const first = await b.pullCards(p.id, null);
     await b.pushCards(p.id, [newCard('b', 'de_en', now)]);
     const second = await b.pullCards(p.id, first.cursor);
-    expect(second.rows.map((c) => c.wordId)).toEqual(['b']);
-    expect((await b.pullCards(p.id, second.cursor)).rows).toEqual([]);
+    expect(second.rows.map((c) => c.wordId)).toContain('b');
+    // nothing new: at most the overlap window of already-seen rows is re-delivered
+    const third = await b.pullCards(p.id, second.cursor);
+    expect(third.rows.every((c) => ['a', 'b'].includes(c.wordId))).toBe(true);
+    expect(third.cursor).toBe(second.cursor);
   });
   test('cloud persists across backend instances (new phone)', async () => {
     await b.signIn(FAKE_PASSWORD);

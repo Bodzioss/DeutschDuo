@@ -12,6 +12,11 @@ export function Layout() {
   const profile = useCurrentProfile();
   return (
     <div className="mx-auto flex min-h-full max-w-[480px] flex-col">
+      {import.meta.env.PROD && import.meta.env.VITE_BACKEND === 'fake' && (
+        <p className="bg-amber-500/20 px-4 py-1 text-center text-xs text-amber-800 dark:text-amber-200">
+          Tryb testowy — postęp zapisuje się tylko na tym urządzeniu
+        </p>
+      )}
       <main className="relative flex-1 px-4 pb-24 pt-[max(1rem,env(safe-area-inset-top))]">
         {profile && (
           <Link

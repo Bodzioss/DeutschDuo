@@ -22,6 +22,10 @@ export interface Backend {
   pushReviews(profileId: string, reviews: ReviewRecord[]): Promise<void>;
   /** Server keeps a card only when the pushed updatedAt is newer than what it has. */
   pushCards(profileId: string, cards: CardRecord[]): Promise<void>;
+  /**
+   * Rows changed since the cursor. May re-deliver already-seen rows (overlap window), so callers must merge
+   * idempotently and must not treat a non-empty result as "something changed".
+   */
   pullReviews(profileId: string, since: Cursor): Promise<{ rows: ReviewRecord[]; cursor: Cursor }>;
   pullCards(profileId: string, since: Cursor): Promise<{ rows: CardRecord[]; cursor: Cursor }>;
 }
