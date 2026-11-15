@@ -3,9 +3,11 @@ import { backend, BackendError } from './backend';
 import type { Backend } from './backend/types';
 import { openProfileDb } from './db';
 import { syncProfile } from './sync';
-import { onSessionEnd } from '@/stores/sessionStore';
+import { onReviewRecorded, onSessionEnd } from '@/stores/sessionStore';
 
 const INTERVAL_MS = 5 * 60_000;
+/** Sync this long after the last answered card (so an interrupted session is backed up quickly). */
+const REVIEW_DEBOUNCE_MS = 3_000;
 export const SIGNED_OUT_EVENT = 'duo:signed-out';
 
 /**
@@ -66,12 +68,19 @@ export function useSync(profileId: string | null): void {
     };
     run();
     const offEnd = onSessionEnd(run);
+    let debounce: ReturnType<typeof setTimeout> | undefined;
+    const offReview = onReviewRecorded(() => {
+      clearTimeout(debounce);
+      debounce = setTimeout(run, REVIEW_DEBOUNCE_MS);
+    });
     const onVisible = () => document.visibilityState === 'visible' && run();
     window.addEventListener('online', run);
     document.addEventListener('visibilitychange', onVisible);
     const timer = setInterval(() => document.visibilityState === 'visible' && run(), INTERVAL_MS);
     return () => {
       offEnd();
+      offReview();
+      clearTimeout(debounce);
       window.removeEventListener('online', run);
       document.removeEventListener('visibilitychange', onVisible);
       clearInterval(timer);

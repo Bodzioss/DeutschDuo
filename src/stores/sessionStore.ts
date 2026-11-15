@@ -15,6 +15,12 @@ export function onSessionEnd(fn: Listener): () => void {
   endListeners.add(fn);
   return () => endListeners.delete(fn);
 }
+const reviewListeners = new Set<Listener>();
+/** Called after every recorded review (used for a debounced background sync, so interrupted sessions sync too). */
+export function onReviewRecorded(fn: Listener): () => void {
+  reviewListeners.add(fn);
+  return () => reviewListeners.delete(fn);
+}
 
 interface SessionState {
   profileId: string | null;
@@ -62,6 +68,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const db = openProfileDb(profileId);
     const requeue = shouldRequeue(await previewRating(db, item, grade, now), now);
     await recordReview(db, { item, grade, durationMs, answer, now, closesQueue: isLast && !requeue });
+    reviewListeners.forEach((fn) => fn());
 
     const nextQueue = requeue ? [...queue, { ...item, isNew: false }] : queue;
     const done = index + 1 >= nextQueue.length;
