@@ -58,7 +58,7 @@
   - no goal at 18:50; none at 23:05; none when `sentToday` has `'goal'`; none when `prefs.goal` false; none when `queueClosed` true with 2 minutes.
   - streak at 21:40: today unmet (`minutes 3, goalMin 15`), yesterday met → `{ kind: 'streak', title: '🔥 Nie przerywaj serii!', body: 'Do celu brakuje 12 min. Zdążysz przed końcem dnia.' }`; none when yesterday unmet; none at 21:20; none at 23:40.
   - at 21:40 with goal also due and not sent → only `streak` returned.
-  - streak still returned when `sentToday` = `['goal','duel','overtake']`; goal not returned when `sentToday` = `['duel','overtake','streak']`... (3 already) → `[]`.
+  - streak still returned when `sentToday` = `['goal','duel','overtake']`; goal not returned when `sentToday` = `['duel','overtake','streak']` (3 already) → `[]`.
   - at 02:30 (previous learning day, wall clock 02:30) → `[]`.
   - `decidePartner('duel', …partnerName 'Nikola')` at 12:00 → `{ kind: 'duel', title: '⚔️ Nikola zagrał(a) pojedynek dnia', body: 'Twoja kolej!', url: '/para' }`; with `duelBothPlayed` → body `'Wynik pojedynku czeka.'`; `'overtake'` → `{ title: '🏆 Nikola wyprzedza Cię w lidze', body: 'Odbijesz?', url: '/para' }`; null at 07:30 and 22:10, null if already sent that kind, null if `prefs.partner` false, null if 3 sent.
 
