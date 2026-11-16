@@ -7,7 +7,8 @@ const sameSource = (a: Source, b: Source) =>
   a.kind === b.kind && (a.kind === 'waste' || (b.kind === 'column' && a.col === b.col && a.depth === b.depth));
 
 /** UI state of one board: tap a card then its destination, or drag it there. */
-export function useBoard(deal: Deal, moveLimit: number) {
+/** `onMoved` runs inside the tap/drop handler (a user gesture), so it may trigger haptics. */
+export function useBoard(deal: Deal, moveLimit: number, onMoved?: (prev: GameState, next: GameState, m: Move) => void) {
   const [state, setState] = useState<GameState>(() => initialState(deal));
   const [selected, setSelected] = useState<Selection>(null);
   const [peeked, setPeeked] = useState<string[]>([]);
@@ -24,8 +25,10 @@ export function useBoard(deal: Deal, moveLimit: number) {
   );
 
   const apply = (m: Move) => {
-    setState((s) => applyMove(deal, s, m));
+    const next = applyMove(deal, state, m);
+    setState(next);
     setSelected(null);
+    onMoved?.(state, next, m);
   };
 
   const select = (src: Selection) => {

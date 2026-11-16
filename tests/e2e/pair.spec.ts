@@ -45,6 +45,8 @@ test('league shows both players; the duel board is identical for both and the re
   // Marcin on the same device sees exactly the same board
   await page.goto('/who');
   await page.getByRole('button', { name: 'Marcin' }).click();
+  // the choice is saved before the picker navigates away; a reload before that would reopen Nikola
+  await expect(page).not.toHaveURL(/\/who/);
   await page.goto(duelUrl);
   await expect(page.getByRole('button', { name: /Pojedynek/ })).toBeVisible();
   expect(await getDeal(page)).toEqual(nikolaDeal);

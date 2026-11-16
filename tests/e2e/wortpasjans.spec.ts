@@ -29,14 +29,22 @@ test('Wortpasjans: map → board → solved by taps → summary with stars, next
   expect(sol.solvable).toBe(true);
 
   let s = initialState(deal);
+  let celebrated = false;
   for (const m of sol.moves) {
     if (m.type === 'draw') await page.getByRole('button', { name: /^Stos/ }).click();
     else {
       await tapSource(page, s, m);
       await tapTarget(page, s, m);
     }
-    s = applyMove(deal, s, m);
+    const next = applyMove(deal, s, m);
+    // the first completed category (not the last one, which ends the game) gets a reward
+    if (!celebrated && next.completed.length === 1 && s.completed.length === 0 && next.completed.length < deal.categories.length) {
+      await expect(page.getByRole('status').getByText('Kategoria ukończona!')).toBeVisible();
+      celebrated = true;
+    }
+    s = next;
   }
+  expect(celebrated).toBe(true);
 
   const summary = page.getByRole('dialog', { name: 'Podsumowanie planszy' });
   await expect(summary).toBeVisible();

@@ -52,6 +52,19 @@ describe('moves', () => {
     expect(s.completed).toEqual(['A']);
     expect(s.slots[0]).toBeNull();
   });
+  test('a run of words of the open category goes to its slot in one move', () => {
+    let s = applyMove(deal, initialState(deal), mv({ type: 'move', from: { kind: 'column', col: 0, depth: 1 }, to: { kind: 'slot', slot: 0 } }));
+    s = applyMove(deal, s, mv({ type: 'move', from: { kind: 'column', col: 1, depth: 1 }, to: { kind: 'column', col: 3 } })); // a1
+    s = applyMove(deal, s, mv({ type: 'move', from: { kind: 'column', col: 2, depth: 1 }, to: { kind: 'column', col: 1 } })); // b2 away
+    s = applyMove(deal, s, mv({ type: 'move', from: { kind: 'column', col: 2, depth: 1 }, to: { kind: 'column', col: 3 } })); // a2 onto a1
+    // a mixed or foreign run is still refused
+    expect(() => applyMove(deal, s, mv({ type: 'move', from: { kind: 'column', col: 1, depth: 1 }, to: { kind: 'slot', slot: 0 } }))).toThrow();
+    const done = applyMove(deal, s, mv({ type: 'move', from: { kind: 'column', col: 3, depth: 2 }, to: { kind: 'slot', slot: 0 } }));
+    expect(done.completed).toEqual(['A']);
+    expect(done.slots[0]).toBeNull();
+    expect(col(done, 3)).toEqual({ faceDown: [], faceUp: [] });
+    expect(done.moves).toBe(s.moves + 1);
+  });
   test('word card cannot open an empty slot', () => {
     const s = initialState(deal);
     expect(() => applyMove(deal, s, mv({ type: 'move', from: { kind: 'column', col: 1, depth: 1 }, to: { kind: 'slot', slot: 0 } }))).toThrow();

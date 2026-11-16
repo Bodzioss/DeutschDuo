@@ -13,13 +13,14 @@ import { localDay } from '@/domain/day';
 import { generateDeal } from '@/domain/wortpasjans/generator';
 import { srsRank } from '@/domain/wortpasjans/pool';
 import { FREE_PEEKS, stars as starsFor } from '@/domain/wortpasjans/scoring';
-import { categoryOf, isCategoryCard, wordIdOf, type CardId, type Deal } from '@/domain/wortpasjans/engine';
+import { categoryOf, isCategoryCard, isWon, wordIdOf, type CardId, type Deal } from '@/domain/wortpasjans/engine';
 import { expectedAnswer } from '@/domain/answerCheck';
 import type { CardRecord, Profile } from '@/domain/types';
 import { Button } from '@/ui/Button';
 import { GenderWord } from '@/ui/GenderWord';
 import { AudioButton } from '@/ui/AudioButton';
 import { speak } from '@/ui/speech';
+import { chime, haptic } from '@/ui/haptics';
 import { CardBack, CategoryCard, WordCard } from './GameCard';
 import { useBoard } from './useBoard';
 import { useCardDrag } from './useCardDrag';
@@ -92,7 +93,24 @@ export function BoardScreen() {
 }
 
 function Board({ profile, deal, par, moveLimit, duelDay, duelPractice, onRetry }: { profile: Profile; deal: Deal; par: number; moveLimit: number; duelDay: string | null; duelPractice: boolean; onRetry: () => void }) {
-  const b = useBoard(deal, moveLimit);
+  const [celebrate, setCelebrate] = useState<{ label: string; key: number } | null>(null);
+  // feedback runs inside the tap/drop gesture, which iPhone needs for its haptic tap
+  const b = useBoard(deal, moveLimit, (prev, next, m) => {
+    const finished = next.completed.slice(prev.completed.length);
+    if (isWon(deal, next)) {
+      haptic('win');
+      chime([523.25, 659.25, 783.99, 1046.5]);
+    } else if (finished.length) {
+      haptic('success');
+      chime();
+      setCelebrate({ label: deal.categories.find((c) => c.id === finished[0])?.label ?? '', key: Date.now() });
+    } else if (m.type === 'move' && m.to.kind === 'slot') haptic('light');
+  });
+  useEffect(() => {
+    if (!celebrate) return;
+    const t = setTimeout(() => setCelebrate(null), 1600);
+    return () => clearTimeout(t);
+  }, [celebrate]);
   const dnd = useCardDrag((from, to) => b.tryMove(from, to));
   const navigate = useNavigate();
   const startWords = useSessionStore((s) => s.startWords);
@@ -244,6 +262,13 @@ function Board({ profile, deal, par, moveLimit, duelDay, duelPractice, onRetry }
           );
         })}
       </div>
+
+      {celebrate && (
+        <div key={celebrate.key} role="status" className="pointer-events-none fixed left-1/2 top-[38%] z-40 animate-pop rounded-2xl bg-das px-6 py-3 text-center text-white shadow-xl motion-reduce:animate-none motion-reduce:-translate-x-1/2">
+          <p className="text-lg font-bold">✓ {celebrate.label}</p>
+          <p className="text-xs opacity-90">Kategoria ukończona!</p>
+        </div>
+      )}
 
       {dnd.drag && (
         <div aria-hidden className="pointer-events-none fixed z-40 drop-shadow-xl" style={{ left: dnd.drag.x - dnd.drag.dx, top: dnd.drag.y - dnd.drag.dy, width: dnd.drag.width }}>

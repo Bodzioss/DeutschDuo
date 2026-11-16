@@ -88,10 +88,10 @@ function check(deal: Deal, s: GameState, m: Move): string | null {
   const cat = [...cats][0];
 
   if (m.to.kind === 'slot') {
-    if (cards.length !== 1) return 'only one card to a slot';
     const slot = s.slots[m.to.slot];
     if (slot === undefined) return 'no such slot';
-    if (isCategoryCard(cards[0])) return slot === null ? null : 'slot occupied';
+    if (isCategoryCard(cards[0])) return cards.length > 1 ? 'one category card at a time' : slot === null ? null : 'slot occupied';
+    // a run of words of one category goes in together
     return slot && slot.categoryId === cat ? null : 'word needs its open category';
   }
 
@@ -139,7 +139,7 @@ export function applyMove(deal: Deal, state: GameState, m: Move): GameState {
     if (isCategoryCard(card)) s.slots[m.to.slot] = { categoryId: cat, count: 0 };
     else {
       const slot = s.slots[m.to.slot]!;
-      slot.count += 1;
+      slot.count += cards.length;
       const size = deal.categories.find((c) => c.id === cat)!.wordIds.length;
       if (slot.count >= size) {
         s.completed.push(cat);
