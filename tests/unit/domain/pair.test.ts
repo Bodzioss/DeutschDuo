@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
-  DUEL_LEVELS, duelForDay, duelGameOf, duelWinner, gameXp, isTie, pairStreak, reviewXp, standings, weekDays, weekGoalPct, weekStart, type Player,
+  DUEL_LEVELS, duelForDay, duelGameOf, duelWinner, gameXp, isTie, overtook, pairStreak, soleLeader, reviewXp, standings, weekDays, weekGoalPct, weekStart, type Player,
 } from '@/domain/pair';
 import { dailyActivity } from '@/domain/streak';
 import type { GameRecord, ReviewRecord } from '@/domain/types';
@@ -145,5 +145,22 @@ describe('league fairness (review fixes)', () => {
   test('a duel is compared only when both played the same board', () => {
     const g1 = game('d', { duelDay: 'd', seed: 5, level: 'berlin-2' });
     expect(duelWinner(g1, game('d', { duelDay: 'd', seed: 6, level: 'berlin-2', moves: 1 }))).toBeNull();
+  });
+});
+
+describe('overtake', () => {
+  const st = (id: string, goalPct: number, xp = 0) => ({ profileId: id, name: id, goalMin: 15, goalPct, xp, daysMet: 0, reviews: 0, duelWins: 0 });
+  test('soleLeader is null on a tie, the leader id otherwise', () => {
+    expect(soleLeader([st('a', 0.5), st('b', 0.5)])).toBeNull();
+    expect(soleLeader([st('a', 0.6), st('b', 0.5)])).toBe('a');
+    expect(soleLeader([])).toBeNull();
+  });
+  test('overtook: me sole leader and not the previous one', () => {
+    const s = [st('me', 0.6), st('p', 0.5)];
+    expect(overtook(null, s, 'me')).toBe(true);
+    expect(overtook('p', s, 'me')).toBe(true);
+    expect(overtook('me', s, 'me')).toBe(false);
+    expect(overtook('p', [st('me', 0.5), st('p', 0.5)], 'me')).toBe(false);
+    expect(overtook('me', [st('p', 0.6), st('me', 0.5)], 'me')).toBe(false);
   });
 });

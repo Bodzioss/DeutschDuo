@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { backend, BackendError } from './backend';
 import type { Backend } from './backend/types';
 import { openProfileDb } from './db';
+import { checkOvertake } from './notify';
+import { localDay } from '@/domain/day';
 import { syncProfile } from './sync';
 import { onReviewRecorded, onSessionEnd } from '@/stores/sessionStore';
 
@@ -74,7 +76,13 @@ export const syncNow = createSyncScheduler<SyncStatus>(async (profileId) => {
 /** Own profile first; partners only if this device is still signed in. */
 export async function syncWithPartners(me: string, partners: string[], run: (id: string) => Promise<SyncStatus> = syncNow): Promise<void> {
   if ((await run(me)) === 'signed_out') return;
-  for (const id of partners) if ((await run(id)) === 'signed_out') return;
+  let allOk = true;
+  for (const id of partners) {
+    const r = await run(id);
+    if (r === 'signed_out') return;
+    if (r !== 'ok') allOk = false;
+  }
+  if (allOk && partners.length) void checkOvertake(me, partners, localDay(new Date()));
 }
 
 /**

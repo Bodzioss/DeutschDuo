@@ -143,6 +143,16 @@ export function isTie(s: Standing[]): boolean {
   return s.length > 1 && s[0].goalPct === s[1].goalPct && s[0].daysMet === s[1].daysMet && s[0].xp === s[1].xp;
 }
 
+/** profileId of a non-tied #1, else null. */
+export function soleLeader(s: Standing[]): string | null {
+  return s.length && !isTie(s) ? s[0].profileId : null;
+}
+
+/** `me` is the sole leader now and was not before. */
+export function overtook(prevLeader: string | null, s: Standing[], me: string): boolean {
+  return soleLeader(s) === me && prevLeader !== me;
+}
+
 // ---------- pair streak & joint goal ----------
 
 /** Consecutive days (up to yesterday, plus today if both already made it) on which both met their goal. */

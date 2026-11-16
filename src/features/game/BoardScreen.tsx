@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useCurrentProfile } from '@/stores/profileStore';
+import { reportDuel } from '@/data/notify';
+import { useCurrentProfile, useProfileStore } from '@/stores/profileStore';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useProfileData } from '@/data/useProfileData';
 import { openProfileDb } from '@/data/db';
@@ -129,7 +130,11 @@ function Board({ profile, deal, par, moveLimit, duelDay, duelPractice, onRetry }
     const st = starsFor({ won, moves: b.state.moves, par, peeks: b.peeked.length });
     await recordGame(db, { level: deal.level, seed: deal.seed, won, stars: st, moves: b.state.moves, par, peeks: b.peeked.length, peekedWordIds: b.peeked, durationMs: b.durationMs(), now: new Date(), ...(duelDay ? { duelDay } : {}) });
     setResult({ stars: st, won });
-    if (duelDay) void syncNow(profile.id); // get the duel result to the partner quickly
+    if (duelDay) {
+      // get the duel result to the partner quickly, then tell their phone
+      const partner = useProfileStore.getState().profiles.find((p) => p.id !== profile.id);
+      void syncNow(profile.id).then(() => (partner ? reportDuel(profile.id, partner.id, duelDay) : undefined));
+    }
   };
 
   useEffect(() => {
