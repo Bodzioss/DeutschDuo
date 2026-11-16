@@ -4,7 +4,8 @@ Wszystkie konta zakłada Marcin. Darmowe plany w zupełności wystarczą.
 
 ## 1. Supabase (baza w chmurze)
 
-1. Na [supabase.com](https://supabase.com) załóż projekt `deutsch-duo`. Region: **EU (Frankfurt)**. Zapisz hasło bazy w menedżerze haseł.
+1. Na [supabase.com](https://supabase.com) załóż projekt `deutsch-duo`. Region: **Europe** (najlepiej Central EU, Frankfurt). Hasło bazy wygeneruj i zapisz w menedżerze haseł; aplikacja go nie używa.
+   W sekcji **Security**: *Enable Data API* zostaw zaznaczone, *Automatically expose new tables* **odznacz** (migracja nadaje uprawnienia jawnie), *Enable automatic RLS* jest opcjonalne.
 2. Otwórz **SQL Editor → New query**, wklej całą zawartość `supabase/migrations/0001_init.sql` i kliknij **Run**.
 3. Przejdź do **Authentication → Users → Add user → Create new user**:
    - e-mail pary, np. adres, który oboje znacie (nie musi istnieć skrzynka, ale lepiej, żeby istniała, bo przyda się do resetu hasła),
@@ -17,8 +18,9 @@ Wszystkie konta zakłada Marcin. Darmowe plany w zupełności wystarczą.
    insert into public.profiles (owner_id, display_name)
    values ('<UID>', 'Nikola'), ('<UID>', 'Marcin');
    ```
-6. Z **Project Settings → API** skopiuj **Project URL** i klucz **anon public**.
-   **Nigdy** nie używaj w aplikacji klucza `service_role`.
+6. Skopiuj **Project URL**: to adres `https://<id>.supabase.co`, widoczny np. w **Integrations → Data API** (bez końcówki `/rest/v1/`).
+   Skopiuj klucz z **Project Settings → API Keys → Publishable key** (`sb_publishable_…`; starszy klucz „anon” też działa).
+   **Nigdy** nie używaj w aplikacji klucza `secret` ani `service_role`.
 
 ## 2. Plik `.env` (lokalnie)
 
@@ -35,14 +37,14 @@ Do pracy bez chmury ustaw `VITE_BACKEND=fake`. Hasło to wtedy `test`, a dane zo
 
 ## 3. Cloudflare Pages (hosting)
 
-1. Na [dash.cloudflare.com](https://dash.cloudflare.com) wybierz **Workers & Pages → Create → Pages → Connect to Git** i połącz repo `Bodzioss/DeutschDuo`.
+1. Na [dash.cloudflare.com](https://dash.cloudflare.com) wybierz **Workers & Pages → Create application**. Na ekranie „Make something new” kliknij na dole **Continue to Pages** (nie „Connect GitHub”, bo to tworzy Workera). Następnie **Import an existing Git repository** i wybierz repo `Bodzioss/DeutschDuo`.
 2. Ustawienia buildu:
    - Framework preset: **None**
    - Build command: `npm run build`
    - Build output directory: `dist`
-   - Zmienne środowiskowe (Production): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_PAIR_EMAIL`, `VITE_BACKEND=supabase`, `NODE_VERSION=22`
+   - Zmienne środowiskowe (Production): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (publishable key), `VITE_PAIR_EMAIL`, `VITE_BACKEND=supabase`, `NODE_VERSION=22`
 3. Plik `public/_redirects` przekierowuje wszystkie ścieżki do `index.html`, więc odświeżenie np. `/stats` działa.
-4. Po deployu zanotuj adres `https://<projekt>.pages.dev`.
+4. Po deployu zanotuj adres `https://<projekt>.pages.dev` (u nas: https://deutschduo.pages.dev).
 
 ## 4. Instalacja na telefonach
 
