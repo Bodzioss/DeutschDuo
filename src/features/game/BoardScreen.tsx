@@ -122,6 +122,7 @@ function Board({ profile, deal, par, moveLimit, duelDay, duelPractice, onRetry }
   const doPeek = (wordId: string) => {
     if (!b.peeked.includes(wordId)) void peekWord(db, wordId, new Date());
     b.peek(wordId);
+    b.select(null); // the first tap of the double tap selected the card
     setPeekCard(wordId);
     const w = getWord(wordId);
     if (w) speak(expectedAnswer(w));
@@ -150,17 +151,12 @@ function Board({ profile, deal, par, moveLimit, duelDay, duelPractice, onRetry }
       return <CategoryCard label={c.label} hint={c.hint} {...opts} />;
     }
     const w = getWord(wordIdOf(card)!)!;
-    return <WordCard word={w} {...opts} onLongPress={() => doPeek(w.id)} />;
+    // a double tap peeks only if its first tap selected this card (not if that tap just moved another card here)
+    return <WordCard word={w} {...opts} onDoubleTap={() => (raw.selected ? !dnd.wasDrag() && doPeek(w.id) : opts.onTap())} />;
   };
 
   const sel = b.selected;
   const peeksLeft = Math.max(0, FREE_PEEKS - b.peeked.length);
-  const selectedWordId = (() => {
-    if (!sel) return null;
-    const card = sel.kind === 'waste' ? b.state.waste[b.state.waste.length - 1] : b.state.columns[sel.col].faceUp[b.state.columns[sel.col].faceUp.length - sel.depth];
-    return card ? wordIdOf(card) : null;
-  })();
-
   return (
     <div className="mx-auto flex min-h-full max-w-[480px] flex-col gap-3 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))]">
       <header className="flex items-center justify-between text-sm">
@@ -170,6 +166,30 @@ function Board({ profile, deal, par, moveLimit, duelDay, duelPractice, onRetry }
         <span className="tabular-nums" aria-label="Pozostałe ruchy">🦶 {b.movesLeft}</span>
         <span className="tabular-nums" aria-label="Darmowe podglądy">👁 {peeksLeft}</span>
       </header>
+
+      {/* progress on the left; discard pile and deck at the top right */}
+      <div className="grid grid-cols-4 items-center gap-2">
+        <div className="col-span-2 space-y-0.5 text-[11px] text-muted">
+          <p>Ukończone: <span className="tabular-nums">{b.state.completed.length}/{deal.categories.length}</span></p>
+          <p>Dotknij słowa 2× — podgląd</p>
+        </div>
+        <div data-testid="waste" className={`touch-none ${dnd.drag?.source.kind === 'waste' ? 'opacity-30' : ''}`}
+          onPointerDown={(e) => b.state.waste.length && dnd.press(e, { kind: 'waste' }, [b.state.waste[b.state.waste.length - 1]])}>
+          {b.state.waste.length ? (
+            renderCard(b.state.waste[b.state.waste.length - 1], {
+              selected: sel?.kind === 'waste',
+              onTap: () => b.select({ kind: 'waste' }),
+              stacked: false,
+            })
+          ) : (
+            <div className="h-[3.25rem] rounded-lg border border-dashed border-muted/25" />
+          )}
+        </div>
+        <button type="button" onClick={b.draw} aria-label={`Stos: ${b.state.stock.length} kart`}
+          className="relative flex min-h-[3.25rem] items-center justify-center rounded-lg border border-muted/30 bg-gradient-to-br from-accent/50 to-accent/25 text-sm font-semibold shadow-sm">
+          {b.state.stock.length ? <span className="tabular-nums">{b.state.stock.length}</span> : <span aria-hidden>↺</span>}
+        </button>
+      </div>
 
       {/* category slots */}
       <div data-testid="slots" className="grid gap-2" style={{ gridTemplateColumns: `repeat(${deal.slots}, minmax(0, 1fr))` }}>
@@ -190,7 +210,6 @@ function Board({ profile, deal, par, moveLimit, duelDay, duelPractice, onRetry }
           );
         })}
       </div>
-      <p className="text-center text-[11px] text-muted">Ukończone: {b.state.completed.length}/{deal.categories.length}</p>
 
       {/* tableau */}
       <div className="grid flex-1 grid-cols-4 gap-2">
@@ -224,31 +243,6 @@ function Board({ profile, deal, par, moveLimit, duelDay, duelPractice, onRetry }
             </div>
           );
         })}
-      </div>
-
-      {/* stock / waste / peek */}
-      <div className="grid grid-cols-4 items-end gap-2">
-        <button type="button" onClick={b.draw} aria-label={`Stos: ${b.state.stock.length} kart`}
-          className="flex h-[3.25rem] items-center justify-center rounded-lg border border-muted/30 bg-gradient-to-br from-accent/40 to-accent/20 text-sm font-semibold">
-          {b.state.stock.length ? `🂠 ${b.state.stock.length}` : '↺'}
-        </button>
-        <div data-testid="waste" className={`touch-none ${dnd.drag?.source.kind === 'waste' ? 'opacity-30' : ''}`}
-          onPointerDown={(e) => b.state.waste.length && dnd.press(e, { kind: 'waste' }, [b.state.waste[b.state.waste.length - 1]])}>
-          {b.state.waste.length ? (
-            renderCard(b.state.waste[b.state.waste.length - 1], {
-              selected: sel?.kind === 'waste',
-              onTap: () => b.select({ kind: 'waste' }),
-              stacked: false,
-            })
-          ) : (
-            <div className="h-[3.25rem] rounded-lg border border-dashed border-muted/25" />
-          )}
-        </div>
-        <div className="col-span-2">
-          <Button variant="secondary" className="w-full py-3 text-sm" disabled={!selectedWordId} onClick={() => selectedWordId && doPeek(selectedWordId)}>
-            🔄 Podejrzyj
-          </Button>
-        </div>
       </div>
 
       {dnd.drag && (

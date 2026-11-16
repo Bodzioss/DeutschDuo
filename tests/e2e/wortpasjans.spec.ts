@@ -46,13 +46,12 @@ test('Wortpasjans: map → board → solved by taps → summary with stars, next
   await expect(page.getByRole('link', { name: /Berlin 2, gwiazdki/ })).toBeVisible();
 });
 
-test('peek shows the translation and costs a free peek', async ({ page }) => {
+test('double tap peeks: shows the translation and costs a free peek', async ({ page }) => {
   await signIn(page);
   await page.goto('/game/berlin-1?seed=777');
   const firstWord = page.locator('[data-testid^=col-][data-testid*=-up-] button[aria-label]:not([aria-label^="Kategoria"])').first();
   await expect(firstWord).toBeVisible();
-  await firstWord.click();
-  await page.getByRole('button', { name: /Podejrzyj/ }).click();
+  await firstWord.dblclick();
   const sheet = page.getByRole('dialog', { name: 'Podgląd słowa' });
   await expect(sheet).toBeVisible();
   await sheet.getByRole('button', { name: 'OK' }).click();

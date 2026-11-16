@@ -2,34 +2,22 @@ import { useRef, type ReactNode } from 'react';
 import type { Word } from '@/domain/types';
 import { GenderWord } from '@/ui/GenderWord';
 
-const LONG_PRESS_MS = 450;
+const DOUBLE_TAP_MS = 350;
 
-const MOVE_TOLERANCE_PX = 10;
-
-/** Long press (touch or mouse) → onLongPress; a normal tap → onTap. Scrolling or moving the finger cancels the press. */
-function usePress(onTap: () => void, onLongPress?: () => void) {
-  const timer = useRef<ReturnType<typeof setTimeout>>();
-  const long = useRef(false);
-  const start = useRef<{ x: number; y: number } | null>(null);
-  const cancel = () => {
-    clearTimeout(timer.current);
-    start.current = null;
-  };
+/** A tap → onTap; a second tap on the same card within a moment → onDoubleTap (instead of a second onTap). */
+function useTaps(onTap: () => void, onDoubleTap?: () => void) {
+  const last = useRef(0);
   return {
-    onPointerDown: (e: React.PointerEvent) => {
-      long.current = false;
-      start.current = { x: e.clientX, y: e.clientY };
-      if (onLongPress) timer.current = setTimeout(() => ((long.current = true), onLongPress()), LONG_PRESS_MS);
-    },
-    onPointerMove: (e: React.PointerEvent) => {
-      if (start.current && Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > MOVE_TOLERANCE_PX) cancel();
-    },
-    onPointerUp: () => clearTimeout(timer.current),
-    onPointerLeave: cancel,
-    onPointerCancel: cancel,
     onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
     onClick: () => {
-      if (!long.current) onTap();
+      const now = Date.now();
+      if (onDoubleTap && now - last.current < DOUBLE_TAP_MS) {
+        last.current = 0;
+        onDoubleTap();
+        return;
+      }
+      last.current = now;
+      onTap();
     },
   };
 }
@@ -40,11 +28,11 @@ export function CardBack({ offset = false }: { offset?: boolean }) {
   return <div aria-hidden className={`h-5 rounded-t-lg border border-muted/30 bg-gradient-to-br from-accent/40 to-accent/20 ${offset ? '' : ''}`} />;
 }
 
-export function WordCard({ word, selected, stacked, onTap, onLongPress }: { word: Word; selected?: boolean; stacked?: boolean; onTap: () => void; onLongPress?: () => void }) {
+export function WordCard({ word, selected, stacked, onTap, onDoubleTap }: { word: Word; selected?: boolean; stacked?: boolean; onTap: () => void; onDoubleTap?: () => void }) {
   return (
     <button
       type="button"
-      {...usePress(onTap, onLongPress)}
+      {...useTaps(onTap, onDoubleTap)}
       aria-label={`${word.article ? word.article + ' ' : ''}${word.de}`}
       aria-pressed={selected}
       className={`flex min-h-[3.25rem] w-full select-none justify-center rounded-lg border border-muted/25 bg-surface px-1 text-center text-[13px] leading-tight shadow-sm transition [-webkit-touch-callout:none] ${stacked ? 'items-start pt-1' : 'items-center py-1.5'} ${frame(!!selected)}`}
