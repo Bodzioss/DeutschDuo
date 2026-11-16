@@ -86,3 +86,22 @@ describe('session goal snapshot', () => {
     expect(r.goalMin).toBe(profile.dailyGoalMin);
   });
 });
+
+describe('practise session from chosen words', () => {
+  test('queues DE→EN items for the given words and never closes the daily queue', async () => {
+    await useSessionStore.getState().startWords(profile, ['danke', 'bitte']);
+    const s = useSessionStore.getState();
+    expect(s.queue.map((i) => i.cardId)).toEqual(['danke:de_en', 'bitte:de_en']);
+    expect(s.queue.every((i) => i.isNew)).toBe(true);
+    await useSessionStore.getState().answer(4);
+    await useSessionStore.getState().answer(4);
+    expect(useSessionStore.getState().done).toBe(true);
+    const reviews = await openProfileDb(profile.id).reviews.toArray();
+    expect(reviews.some((r) => r.closesQueue)).toBe(false);
+  });
+  test('a practise session is not resumed as the daily session', async () => {
+    await useSessionStore.getState().startWords(profile, ['danke', 'bitte']);
+    await useSessionStore.getState().answer(4);
+    expect(isResumable(useSessionStore.getState(), profile.id, new Date())).toBe(false);
+  });
+});

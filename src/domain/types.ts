@@ -62,6 +62,23 @@ export interface ReviewRecord {
   synced: 0 | 1;
 }
 
+/** One finished (won, lost or abandoned) Wortpasjans board. */
+export interface GameRecord {
+  id: string;
+  level: string;
+  seed: number;
+  won: boolean;
+  stars: number;
+  moves: number;
+  par: number;
+  peeks: number;
+  peekedWordIds: string[];
+  durationMs: number;
+  playedAt: string;
+  localDay: string;
+  synced: 0 | 1;
+}
+
 export interface Profile {
   id: string;
   displayName: string;

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { buildSession, shouldRequeue, type SessionItem } from '@/domain/sessionBuilder';
 import { localDay } from '@/domain/day';
-import type { Grade, Profile } from '@/domain/types';
+import { cardId, type Grade, type Profile } from '@/domain/types';
 import { openProfileDb } from '@/data/db';
 import { loadAll, previewRating, recordReview } from '@/data/repo';
 import { getWords } from '@/data/words';
@@ -33,7 +33,11 @@ interface SessionState {
   index: number;
   shownAt: number | null;
   done: boolean;
+  /** 'daily' = today's queue (can close the daily goal); 'practice' = chosen words, e.g. after a game. */
+  kind: 'daily' | 'practice';
   start(profile: Profile): Promise<void>;
+  /** Practice session made of the given words (DE→EN). Never counts as finishing today's queue. */
+  startWords(profile: Profile, wordIds: string[]): Promise<void>;
   answer(grade: Grade, answer?: string): Promise<void>;
   reset(): void;
 }
@@ -46,6 +50,15 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   index: 0,
   shownAt: null,
   done: false,
+  kind: 'daily',
+
+  async startWords(profile, wordIds) {
+    const db = openProfileDb(profile.id);
+    const ids = wordIds.map((w) => cardId(w, 'de_en'));
+    const existing = await db.cards.bulkGet(ids);
+    const queue: SessionItem[] = wordIds.map((w, i) => ({ cardId: ids[i], wordId: w, direction: 'de_en', isNew: !existing[i] || existing[i]!.fsrs.reps === 0 }));
+    set({ kind: 'practice', profileId: profile.id, goalMin: profile.dailyGoalMin, builtForDay: localDay(new Date()), queue, index: 0, shownAt: Date.now(), done: queue.length === 0 });
+  },
 
   async start(profile) {
     const db = openProfileDb(profile.id);
@@ -59,11 +72,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       now,
       newPerDay: profile.newPerDay,
     });
-    set({ profileId: profile.id, goalMin: profile.dailyGoalMin, builtForDay: today, queue, index: 0, shownAt: Date.now(), done: queue.length === 0 });
+    set({ kind: 'daily', profileId: profile.id, goalMin: profile.dailyGoalMin, builtForDay: today, queue, index: 0, shownAt: Date.now(), done: queue.length === 0 });
   },
 
   async answer(grade, answer) {
-    const { profileId, queue, index, shownAt, goalMin } = get();
+    const { profileId, queue, index, shownAt, goalMin, kind } = get();
     const item = queue[index];
     if (!profileId || !item || answering) return; // double-tap guard
     answering = true;
@@ -76,7 +89,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // (a patch afterwards could race with a background sync that already pushed the review).
     const db = openProfileDb(profileId);
     const requeue = shouldRequeue(await previewRating(db, item, grade, now), now);
-    await recordReview(db, { item, grade, durationMs, answer, now, closesQueue: isLast && !requeue, goalMin: goalMin ?? undefined });
+    await recordReview(db, { item, grade, durationMs, answer, now, closesQueue: kind === 'daily' && isLast && !requeue, goalMin: goalMin ?? undefined });
     reviewListeners.forEach((fn) => fn());
 
     const nextQueue = requeue ? [...queue, { ...item, isNew: false }] : queue;
@@ -89,11 +102,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   reset() {
-    set({ profileId: null, goalMin: null, builtForDay: null, queue: [], index: 0, shownAt: null, done: false });
+    set({ kind: 'daily', profileId: null, goalMin: null, builtForDay: null, queue: [], index: 0, shownAt: null, done: false });
   },
 }));
 
 /** A session may be continued only for the same profile, on the same learning day, with cards left. */
-export function isResumable(s: Pick<SessionState, 'profileId' | 'builtForDay' | 'done' | 'queue' | 'index'>, profileId: string, now: Date): boolean {
-  return s.profileId === profileId && s.builtForDay === localDay(now) && !s.done && s.index < s.queue.length;
+export function isResumable(s: Pick<SessionState, 'profileId' | 'builtForDay' | 'done' | 'queue' | 'index' | 'kind'>, profileId: string, now: Date): boolean {
+  return s.kind === 'daily' && s.profileId === profileId && s.builtForDay === localDay(now) && !s.done && s.index < s.queue.length;
 }

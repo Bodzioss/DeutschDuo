@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { CardRecord, Profile, ReviewRecord } from '@/domain/types';
+import type { CardRecord, GameRecord, Profile, ReviewRecord } from '@/domain/types';
 
 export interface MetaRow {
   key: string;
@@ -11,6 +11,7 @@ export class DuoDB extends Dexie {
   cards!: Table<CardRecord, string>;
   reviews!: Table<ReviewRecord, string>;
   meta!: Table<MetaRow, string>;
+  games!: Table<GameRecord, string>;
 
   constructor(name: string) {
     super(name);
@@ -19,6 +20,7 @@ export class DuoDB extends Dexie {
       reviews: '&id, localDay, synced, cardId',
       meta: '&key',
     });
+    this.version(2).stores({ games: '&id, level, synced, localDay' });
   }
 }
 
