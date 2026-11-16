@@ -78,3 +78,11 @@ describe('session day stamp', () => {
     expect(isResumable(useSessionStore.getState(), profile.id, new Date())).toBe(false);
   });
 });
+
+describe('session goal snapshot', () => {
+  test("answers carry the profile's daily goal", async () => {
+    await useSessionStore.getState().answer(4);
+    const [r] = await openProfileDb(profile.id).reviews.toArray();
+    expect(r.goalMin).toBe(profile.dailyGoalMin);
+  });
+});

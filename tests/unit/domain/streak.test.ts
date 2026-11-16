@@ -105,3 +105,24 @@ describe('dailyActivity', () => {
     expect(r.current).toBe(4);
   });
 });
+
+describe('daily goal snapshot', () => {
+  const r = (at: Date, goalMin: number, durationMs: number): ReviewRecord => ({
+    id: Math.random().toString(), cardId: 'a:de_en', rating: 3, durationMs, reviewedAt: at.toISOString(), localDay: localDay(at),
+    wasNew: false, closesQueue: false, scheduledDays: 1, goalMin, synced: 0,
+  });
+  test('raising the goal later does not turn past days into misses', () => {
+    // three past days with 16 min each under a 15-min goal; the goal is now 30
+    const reviews = [13, 14, 15].map((d) => r(new Date(2026, 10, d, 12), 15, 16 * 60_000));
+    expect(computeStreak(dailyActivity(reviews), '2026-11-16', 30).current).toBe(3);
+  });
+  test('lowering the goal later does not resurrect past misses', () => {
+    const reviews = [13, 14, 15].map((d) => r(new Date(2026, 10, d, 12), 30, 16 * 60_000));
+    expect(computeStreak(dailyActivity(reviews), '2026-11-16', 15).current).toBe(0);
+  });
+  test('reviews without a snapshot (older data) fall back to the current goal', () => {
+    const legacy = { ...r(new Date(2026, 10, 15, 12), 15, 16 * 60_000) };
+    delete (legacy as Partial<ReviewRecord>).goalMin;
+    expect(computeStreak(dailyActivity([legacy]), '2026-11-16', 15).current).toBe(1);
+  });
+});

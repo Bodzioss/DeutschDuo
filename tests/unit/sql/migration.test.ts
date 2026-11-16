@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeAll, describe, expect, test } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 
 // Minimal stand-in for what Supabase provides: auth schema, auth.uid(), anon/authenticated roles.
 const SUPABASE_STUB = `
@@ -38,7 +38,9 @@ const card = (id: string, updatedAt: string, stability = 1) => ({
 beforeAll(async () => {
   db = new PGlite();
   await db.exec(SUPABASE_STUB);
-  await db.exec(readFileSync('supabase/migrations/0001_init.sql', 'utf8'));
+  for (const f of readdirSync('supabase/migrations').filter((f) => f.endsWith('.sql')).sort()) {
+    await db.exec(readFileSync(`supabase/migrations/${f}`, 'utf8'));
+  }
   await db.exec(`insert into auth.users values ('${U1}'), ('${U2}')`);
   P1 = (await db.query<{ id: string }>(`insert into profiles (owner_id, display_name) values ('${U1}', 'Nikola') returning id`)).rows[0].id;
   P2 = (await db.query<{ id: string }>(`insert into profiles (owner_id, display_name) values ('${U2}', 'Obcy') returning id`)).rows[0].id;
@@ -112,5 +114,12 @@ describe('0001_init.sql', () => {
     expect((await at()).getTime()).toBeGreaterThan(t1.getTime());
     const r = await as(U1, `select changed_at from reviews limit 1`);
     expect(r.rows.length === 0 || (r.rows[0] as { changed_at: Date }).changed_at instanceof Date).toBe(true);
+  });
+
+  test('0002: reviews store the daily goal snapshot', async () => {
+    const id = '44444444-4444-4444-8444-444444444444';
+    await as(U1, `insert into reviews (id, profile_id, card_id, rating, duration_ms, reviewed_at, local_day, was_new, goal_min)
+                  values ($1, $2, 'a:de_en', 3, 1, now(), '2026-11-16', false, 20)`, [id, P1]);
+    expect((await as(U1, `select goal_min from reviews where id = $1`, [id])).rows[0]).toEqual({ goal_min: 20 });
   });
 });

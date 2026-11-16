@@ -28,7 +28,7 @@ type ProfileRow = { id: string; display_name: string; daily_goal_min: number; ne
 type CardRow = { card_id: string; word_id: string; direction: Direction; fsrs: FsrsState; updated_at: string; server_seq: number; changed_at: string };
 type ReviewRow = {
   id: string; card_id: string; rating: Grade; duration_ms: number; reviewed_at: string; local_day: string;
-  was_new: boolean; closes_queue: boolean; scheduled_days: number; answer: string | null; server_seq: number; changed_at: string;
+  was_new: boolean; closes_queue: boolean; scheduled_days: number; answer: string | null; goal_min: number | null; server_seq: number; changed_at: string;
 };
 
 const toProfile = (r: ProfileRow): Profile => ({
@@ -43,6 +43,7 @@ const toReview = (r: ReviewRow): ReviewRecord => {
     localDay: r.local_day, wasNew: r.was_new, closesQueue: r.closes_queue, scheduledDays: r.scheduled_days, synced: 1,
   };
   if (r.answer !== null) out.answer = r.answer;
+  if (r.goal_min !== null && r.goal_min !== undefined) out.goalMin = r.goal_min;
   return out;
 };
 
@@ -150,7 +151,7 @@ export function createSupabaseBackend(url: string, anonKey: string, pairEmail: s
       if (!reviews.length) return;
       const rows = reviews.map((r) => ({
         id: r.id, profile_id: profileId, card_id: r.cardId, rating: r.rating, duration_ms: r.durationMs, reviewed_at: r.reviewedAt,
-        local_day: r.localDay, was_new: r.wasNew, closes_queue: r.closesQueue, scheduled_days: r.scheduledDays, answer: r.answer ?? null,
+        local_day: r.localDay, was_new: r.wasNew, closes_queue: r.closesQueue, scheduled_days: r.scheduledDays, answer: r.answer ?? null, goal_min: r.goalMin ?? null,
       }));
       const { error } = await sb.from('reviews').upsert(rows, { onConflict: 'id', ignoreDuplicates: true });
       if (error) fail(error);
@@ -164,7 +165,7 @@ export function createSupabaseBackend(url: string, anonKey: string, pairEmail: s
     async pullReviews(profileId, since) {
       const r = await pull<ReviewRow>(
         'reviews',
-        'id, card_id, rating, duration_ms, reviewed_at, local_day, was_new, closes_queue, scheduled_days, answer',
+        'id, card_id, rating, duration_ms, reviewed_at, local_day, was_new, closes_queue, scheduled_days, answer, goal_min',
         profileId,
         since,
       );

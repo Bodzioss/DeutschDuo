@@ -25,6 +25,8 @@ export function onReviewRecorded(fn: Listener): () => void {
 
 interface SessionState {
   profileId: string | null;
+  /** Daily goal of the profile when the session was built (snapshotted on every review). */
+  goalMin: number | null;
   /** Learning day the queue was built for; a queue from another day must be rebuilt, never resumed. */
   builtForDay: string | null;
   queue: SessionItem[];
@@ -38,6 +40,7 @@ interface SessionState {
 
 export const useSessionStore = create<SessionState>((set, get) => ({
   profileId: null,
+  goalMin: null,
   builtForDay: null,
   queue: [],
   index: 0,
@@ -56,11 +59,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       now,
       newPerDay: profile.newPerDay,
     });
-    set({ profileId: profile.id, builtForDay: today, queue, index: 0, shownAt: Date.now(), done: queue.length === 0 });
+    set({ profileId: profile.id, goalMin: profile.dailyGoalMin, builtForDay: today, queue, index: 0, shownAt: Date.now(), done: queue.length === 0 });
   },
 
   async answer(grade, answer) {
-    const { profileId, queue, index, shownAt } = get();
+    const { profileId, queue, index, shownAt, goalMin } = get();
     const item = queue[index];
     if (!profileId || !item || answering) return; // double-tap guard
     answering = true;
@@ -73,7 +76,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // (a patch afterwards could race with a background sync that already pushed the review).
     const db = openProfileDb(profileId);
     const requeue = shouldRequeue(await previewRating(db, item, grade, now), now);
-    await recordReview(db, { item, grade, durationMs, answer, now, closesQueue: isLast && !requeue });
+    await recordReview(db, { item, grade, durationMs, answer, now, closesQueue: isLast && !requeue, goalMin: goalMin ?? undefined });
     reviewListeners.forEach((fn) => fn());
 
     const nextQueue = requeue ? [...queue, { ...item, isNew: false }] : queue;
@@ -86,7 +89,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   reset() {
-    set({ profileId: null, builtForDay: null, queue: [], index: 0, shownAt: null, done: false });
+    set({ profileId: null, goalMin: null, builtForDay: null, queue: [], index: 0, shownAt: null, done: false });
   },
 }));
 

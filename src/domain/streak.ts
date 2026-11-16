@@ -7,6 +7,8 @@ export interface DayActivity {
   newWords: number;
   minutes: number;
   queueClosed: boolean;
+  /** Smallest goal snapshot of the day's reviews (undefined for legacy reviews without one). */
+  goalMin?: number;
 }
 
 export const MAX_FREEZES = 2;
@@ -21,12 +23,14 @@ export function dailyActivity(reviews: ReviewRecord[]): Map<string, DayActivity>
     if (r.wasNew && r.cardId.endsWith(':de_en')) a.newWords += 1;
     a.minutes += r.durationMs / 60000;
     if (r.closesQueue) a.queueClosed = true;
+    if (r.goalMin !== undefined) a.goalMin = a.goalMin === undefined ? r.goalMin : Math.min(a.goalMin, r.goalMin);
   }
   return m;
 }
 
-export function isGoalMet(a: DayActivity | undefined, goalMin: number): boolean {
-  return !!a && (a.minutes >= goalMin || a.queueClosed);
+/** `fallbackGoalMin` applies only to days whose reviews carry no goal snapshot (older data). */
+export function isGoalMet(a: DayActivity | undefined, fallbackGoalMin: number): boolean {
+  return !!a && (a.minutes >= (a.goalMin ?? fallbackGoalMin) || a.queueClosed);
 }
 
 export function computeStreak(

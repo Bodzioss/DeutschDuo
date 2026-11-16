@@ -75,3 +75,11 @@ describe('unlocked en_de card', () => {
     expect(unlocked!.dirty).toBe(1);
   });
 });
+
+describe('goal snapshot', () => {
+  test('recordReview stores the daily goal in effect', async () => {
+    const { review } = await recordReview(db, { item, grade: 3, durationMs: 1, now, closesQueue: false, goalMin: 20 });
+    expect(review.goalMin).toBe(20);
+    expect((await db.reviews.get(review.id))!.goalMin).toBe(20);
+  });
+});

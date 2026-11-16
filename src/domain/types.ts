@@ -56,6 +56,8 @@ export interface ReviewRecord {
   closesQueue: boolean;
   /** FSRS interval after this review (used by stats). */
   scheduledDays: number;
+  /** Daily goal (minutes) in effect when this review was made; a day is judged by its own goal, not today's. */
+  goalMin?: number;
   answer?: string;
   synced: 0 | 1;
 }

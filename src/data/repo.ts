@@ -8,7 +8,7 @@ export const UNLOCKED_AT = new Date(0).toISOString();
 
 export async function recordReview(
   db: DuoDB,
-  p: { item: SessionItem; grade: Grade; durationMs: number; answer?: string; now: Date; closesQueue: boolean },
+  p: { item: SessionItem; grade: Grade; durationMs: number; answer?: string; now: Date; closesQueue: boolean; goalMin?: number },
 ): Promise<{ card: CardRecord; review: ReviewRecord; unlocked?: CardRecord }> {
   return db.transaction('rw', db.cards, db.reviews, async () => {
     const { item, grade, now } = p;
@@ -29,6 +29,7 @@ export async function recordReview(
       synced: 0,
     };
     if (p.answer !== undefined) review.answer = p.answer;
+    if (p.goalMin !== undefined) review.goalMin = p.goalMin;
 
     await db.cards.put(card);
     await db.reviews.add(review);
