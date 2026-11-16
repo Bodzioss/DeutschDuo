@@ -122,4 +122,16 @@ describe('0001_init.sql', () => {
                   values ($1, $2, 'a:de_en', 3, 1, now(), '2026-11-16', false, 20)`, [id, P1]);
     expect((await as(U1, `select goal_min from reviews where id = $1`, [id])).rows[0]).toEqual({ goal_min: 20 });
   });
+
+  test('0003: game_sessions are append-only and private to the owner', async () => {
+    const id = '55555555-5555-4555-8555-555555555555';
+    const ins = `insert into game_sessions (id, profile_id, level, seed, won, stars, moves, par, peeks, peeked_word_ids, duration_ms, played_at, local_day)
+                 values ($1, $2, 'berlin-1', 7, true, 3, 20, 18, 1, '{hallo}', 60000, now(), '2026-11-16') on conflict (id) do nothing`;
+    await as(U1, ins, [id, P1]);
+    await as(U1, ins, [id, P1]);
+    expect((await as(U1, `select count(*)::int as n, max(stars) as s from game_sessions`)).rows[0]).toEqual({ n: 1, s: 3 });
+    expect((await as(U2, `select count(*)::int as n from game_sessions`)).rows[0]).toEqual({ n: 0 });
+    await expect(as(U1, `update game_sessions set stars = 1 where id = $1`, [id])).rejects.toThrow(/permission denied/);
+    await expect(as(U1, ins.replace(' on conflict (id) do nothing', ''), ['66666666-6666-4666-8666-666666666666', P2])).rejects.toThrow(/row-level security/);
+  });
 });

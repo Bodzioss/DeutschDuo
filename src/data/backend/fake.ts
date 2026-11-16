@@ -1,4 +1,4 @@
-import type { CardRecord, Profile, ReviewRecord } from '@/domain/types';
+import type { CardRecord, GameRecord, Profile, ReviewRecord } from '@/domain/types';
 import { BackendError, type Backend, type Cursor } from './types';
 
 /** In-browser stand-in for Supabase (tests, E2E, offline dev). The "cloud" lives in localStorage. */
@@ -11,6 +11,7 @@ interface Cloud {
   profiles: Profile[];
   cards: Record<string, Record<string, { card: CardRecord; seq: number }>>;
   reviews: Record<string, Record<string, { review: ReviewRecord; seq: number }>>;
+  games?: Record<string, Record<string, { game: GameRecord; seq: number }>>;
 }
 
 const DEFAULT_PROFILES: Profile[] = [
@@ -82,6 +83,19 @@ export function createFakeBackend(): Backend {
       const c = load();
       const rows = Object.values(c.reviews[profileId] ?? {}).filter((x) => x.seq > fromCursor(since)).sort((a, b) => a.seq - b.seq);
       return { rows: rows.map((x) => x.review), cursor: rows.length ? toCursor(Math.max(Number(since ?? 0), rows[rows.length - 1].seq)) : since };
+    },
+    async pushGames(profileId, games) {
+      guard();
+      const c = load();
+      const t = ((c.games ??= {})[profileId] ??= {});
+      for (const g of games) if (!t[g.id]) t[g.id] = { game: { ...g, synced: 1 }, seq: ++c.seq };
+      save(c);
+    },
+    async pullGames(profileId, since) {
+      guard();
+      const c = load();
+      const rows = Object.values(c.games?.[profileId] ?? {}).filter((x) => x.seq > fromCursor(since)).sort((a, b) => a.seq - b.seq);
+      return { rows: rows.map((x) => x.game), cursor: rows.length ? toCursor(Math.max(Number(since ?? 0), rows[rows.length - 1].seq)) : since };
     },
     async pullCards(profileId, since) {
       guard();

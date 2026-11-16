@@ -1,5 +1,5 @@
 import { createClient, isAuthRetryableFetchError, type SupabaseClient } from '@supabase/supabase-js';
-import type { CardRecord, Direction, FsrsState, Grade, Profile, ReviewRecord } from '@/domain/types';
+import type { CardRecord, Direction, FsrsState, GameRecord, Grade, Profile, ReviewRecord } from '@/domain/types';
 import { BackendError, type Backend, type Cursor } from './types';
 
 const PAGE = 1000;
@@ -30,6 +30,15 @@ type ReviewRow = {
   id: string; card_id: string; rating: Grade; duration_ms: number; reviewed_at: string; local_day: string;
   was_new: boolean; closes_queue: boolean; scheduled_days: number; answer: string | null; goal_min: number | null; server_seq: number; changed_at: string;
 };
+
+type GameRow = {
+  id: string; level: string; seed: number; won: boolean; stars: number; moves: number; par: number; peeks: number;
+  peeked_word_ids: string[]; duration_ms: number; played_at: string; local_day: string; server_seq: number; changed_at: string;
+};
+const toGame = (r: GameRow): GameRecord => ({
+  id: r.id, level: r.level, seed: r.seed, won: r.won, stars: r.stars, moves: r.moves, par: r.par, peeks: r.peeks,
+  peekedWordIds: r.peeked_word_ids ?? [], durationMs: r.duration_ms, playedAt: new Date(r.played_at).toISOString(), localDay: r.local_day, synced: 1,
+});
 
 const toProfile = (r: ProfileRow): Profile => ({
   id: r.id, displayName: r.display_name, dailyGoalMin: r.daily_goal_min, newPerDay: r.new_per_day, showPl: r.show_pl,
@@ -170,6 +179,24 @@ export function createSupabaseBackend(url: string, anonKey: string, pairEmail: s
         since,
       );
       return { rows: r.rows.map(toReview), cursor: r.cursor };
+    },
+    async pushGames(profileId, games) {
+      if (!games.length) return;
+      const rows = games.map((g) => ({
+        id: g.id, profile_id: profileId, level: g.level, seed: g.seed, won: g.won, stars: g.stars, moves: g.moves, par: g.par,
+        peeks: g.peeks, peeked_word_ids: g.peekedWordIds, duration_ms: g.durationMs, played_at: g.playedAt, local_day: g.localDay,
+      }));
+      const { error } = await sb.from('game_sessions').upsert(rows, { onConflict: 'id', ignoreDuplicates: true });
+      if (error) fail(error);
+    },
+    async pullGames(profileId, since) {
+      const r = await pull<GameRow>(
+        'game_sessions',
+        'id, level, seed, won, stars, moves, par, peeks, peeked_word_ids, duration_ms, played_at, local_day',
+        profileId,
+        since,
+      );
+      return { rows: r.rows.map(toGame), cursor: r.cursor };
     },
     async pullCards(profileId, since) {
       const r = await pull<CardRow>('user_cards', 'card_id, word_id, direction, fsrs, updated_at', profileId, since);

@@ -109,7 +109,7 @@ describe('syncProfile', () => {
     await recordReview(db, { item: item('a'), grade: 3, durationMs: 1000, now: t0, closesQueue: false });
     await syncProfile(db, pid, cloud);
     const r = await syncProfile(db, pid, cloud);
-    expect(r).toEqual({ pushedReviews: 0, pushedCards: 0, pulledReviews: 0, pulledCards: 0 });
+    expect(r).toEqual({ pushedReviews: 0, pushedCards: 0, pulledReviews: 0, pulledCards: 0, pushedGames: 0, pulledGames: 0 });
   });
 
   test('pulled reviews do not overwrite local closesQueue/answer of the same id', async () => {
@@ -117,5 +117,21 @@ describe('syncProfile', () => {
     const { review } = await recordReview(db, { item: item('a'), grade: 3, durationMs: 1000, answer: 'x', now: t0, closesQueue: true });
     await syncProfile(db, pid, cloud);
     expect((await db.reviews.get(review.id))!.closesQueue).toBe(true);
+  });
+});
+
+describe('game sync', () => {
+  test('games are pushed once and pulled on another device', async () => {
+    const { recordGame } = await import('@/data/games');
+    const d1 = device();
+    await recordGame(d1, { level: 'berlin-1', seed: 7, won: true, stars: 3, moves: 20, par: 18, peeks: 0, peekedWordIds: [], durationMs: 1000, now: t0 });
+    const r1 = await syncProfile(d1, pid, cloud);
+    expect(r1.pushedGames).toBe(1);
+    expect(await d1.games.where('synced').equals(0).count()).toBe(0);
+    await syncProfile(d1, pid, cloud);
+    const d2 = device();
+    const r2 = await syncProfile(d2, pid, cloud);
+    expect(r2.pulledGames).toBe(1);
+    expect((await d2.games.toArray())[0]).toMatchObject({ level: 'berlin-1', seed: 7, stars: 3, synced: 1 });
   });
 });

@@ -1,4 +1,4 @@
-import type { CardRecord, Profile, ReviewRecord } from '@/domain/types';
+import type { CardRecord, GameRecord, Profile, ReviewRecord } from '@/domain/types';
 
 export type BackendErrorCode = 'bad_password' | 'offline' | 'unauthorized';
 
@@ -33,4 +33,7 @@ export interface Backend {
    */
   pullReviews(profileId: string, since: Cursor): Promise<{ rows: ReviewRecord[]; cursor: Cursor }>;
   pullCards(profileId: string, since: Cursor): Promise<{ rows: CardRecord[]; cursor: Cursor }>;
+  /** Finished Wortpasjans boards; append-only, idempotent by id (like reviews). */
+  pushGames(profileId: string, games: GameRecord[]): Promise<void>;
+  pullGames(profileId: string, since: Cursor): Promise<{ rows: GameRecord[]; cursor: Cursor }>;
 }
