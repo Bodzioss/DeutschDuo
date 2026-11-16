@@ -10,3 +10,4 @@ playwright-report
 *.log
 supabase/.secrets.local
 supabase/.temp/
+supabase/.cron.local.sql
