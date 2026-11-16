@@ -58,3 +58,30 @@ test('peek shows the translation and costs a free peek', async ({ page }) => {
   await sheet.getByRole('button', { name: 'OK' }).click();
   await expect(page.getByLabel('Darmowe podglądy')).toHaveText('👁 2');
 });
+
+test('cards can be dragged: a category card dragged onto an empty slot opens it', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/game/berlin-1?seed=12345');
+  await expect(page.locator('[data-testid=slots]')).toBeVisible();
+  const deal = (await page.evaluate(() => (window as unknown as { __duoDeal: Deal }).__duoDeal)) as Deal;
+  // draw until a category card is on the waste (or one is on top of a column)
+  let s = initialState(deal);
+  const catCol = s.columns.findIndex((c) => c.faceUp[c.faceUp.length - 1]?.startsWith('cat:'));
+  let source;
+  if (catCol >= 0) source = page.locator(`[data-testid=col-${catCol}-up-${s.columns[catCol].faceUp.length - 1}] button`);
+  else {
+    while (!s.waste[s.waste.length - 1]?.startsWith('cat:')) {
+      await page.getByRole('button', { name: /^Stos/ }).click();
+      s = applyMove(deal, s, { type: 'draw' });
+    }
+    source = page.locator('[data-testid=waste] button');
+  }
+  const from = (await source.boundingBox())!;
+  const to = (await page.locator('[data-testid=slot-0]').boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + from.width / 2 + 20, from.y + from.height / 2 - 20, { steps: 3 });
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.locator('[data-testid=slot-0]').getByRole('button', { name: /^Kategoria/ })).toBeVisible();
+});

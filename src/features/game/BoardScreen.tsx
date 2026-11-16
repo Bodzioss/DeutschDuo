@@ -22,6 +22,7 @@ import { AudioButton } from '@/ui/AudioButton';
 import { speak } from '@/ui/speech';
 import { CardBack, CategoryCard, WordCard } from './GameCard';
 import { useBoard } from './useBoard';
+import { useCardDrag } from './useCardDrag';
 
 /** Builds a personalised solvable deal once per attempt (not on every DB change). */
 function useDeal(levelId: string, cards: CardRecord[] | null, attempt: number, fixedSeed: number | null, duel: boolean) {
@@ -92,6 +93,7 @@ export function BoardScreen() {
 
 function Board({ profile, deal, par, moveLimit, duelDay, duelPractice, onRetry }: { profile: Profile; deal: Deal; par: number; moveLimit: number; duelDay: string | null; duelPractice: boolean; onRetry: () => void }) {
   const b = useBoard(deal, moveLimit);
+  const dnd = useCardDrag((from, to) => b.tryMove(from, to));
   const navigate = useNavigate();
   const startWords = useSessionStore((s) => s.startWords);
   const [peekCard, setPeekCard] = useState<string | null>(null);
@@ -140,10 +142,9 @@ function Board({ profile, deal, par, moveLimit, duelDay, duelPractice, onRetry }
     navigate(duelPractice ? '/para' : '/game');
   };
 
-  const isTarget = (t: { kind: 'slot'; slot: number } | { kind: 'column'; col: number }) =>
-    b.targets.some((x) => x.kind === t.kind && (x.kind === 'slot' ? t.kind === 'slot' && x.slot === t.slot : t.kind === 'column' && x.col === t.col));
-
-  const renderCard = (card: CardId, opts: { selected: boolean; target: boolean; onTap: () => void; stacked?: boolean }) => {
+  const renderCard = (card: CardId, raw: { selected: boolean; onTap: () => void; stacked?: boolean }) => {
+    // the click that ends a drag is not a tap
+    const opts = { ...raw, onTap: () => !dnd.wasDrag() && raw.onTap() };
     if (isCategoryCard(card)) {
       const c = catLabel.get(categoryOf(deal, card))!;
       return <CategoryCard label={c.label} hint={c.hint} {...opts} />;
@@ -173,18 +174,17 @@ function Board({ profile, deal, par, moveLimit, duelDay, duelPractice, onRetry }
       {/* category slots */}
       <div data-testid="slots" className="grid gap-2" style={{ gridTemplateColumns: `repeat(${deal.slots}, minmax(0, 1fr))` }}>
         {b.state.slots.map((slot, i) => {
-          const target = isTarget({ kind: 'slot', slot: i });
           if (!slot) {
             return (
-              <button key={i} data-testid={`slot-${i}`} type="button" onClick={() => b.moveTo({ kind: 'slot', slot: i })} aria-label="Wolne pole kategorii"
-                className={`flex min-h-[3.25rem] items-center justify-center rounded-lg border-2 border-dashed border-muted/30 text-[11px] text-muted ${target ? 'ring-2 ring-das' : ''}`}>
+              <button key={i} data-testid={`slot-${i}`} data-drop={`slot:${i}`} type="button" onClick={() => b.moveTo({ kind: 'slot', slot: i })} aria-label="Wolne pole kategorii"
+                className={`flex min-h-[3.25rem] items-center justify-center rounded-lg border-2 border-dashed border-muted/30 text-[11px] text-muted`}>
                 wolne pole
               </button>
             );
           }
           const c = catLabel.get(slot.categoryId)!;
           return (
-            <div key={i} data-testid={`slot-${i}`}><CategoryCard label={c.label} hint={c.hint} target={target} onTap={() => b.moveTo({ kind: 'slot', slot: i })}>
+            <div key={i} data-testid={`slot-${i}`} data-drop={`slot:${i}`}><CategoryCard label={c.label} hint={c.hint} onTap={() => b.moveTo({ kind: 'slot', slot: i })}>
               <span className="text-[11px] tabular-nums">{slot.count}/{c.wordIds.length}</span>
             </CategoryCard></div>
           );
@@ -193,12 +193,11 @@ function Board({ profile, deal, par, moveLimit, duelDay, duelPractice, onRetry }
       <p className="text-center text-[11px] text-muted">Ukończone: {b.state.completed.length}/{deal.categories.length}</p>
 
       {/* tableau */}
-      <div className="grid flex-1 grid-cols-4 items-start gap-2">
+      <div className="grid flex-1 grid-cols-4 gap-2">
         {b.state.columns.map((col, ci) => {
-          const target = isTarget({ kind: 'column', col: ci });
           const empty = !col.faceDown.length && !col.faceUp.length;
           return (
-            <div key={ci} data-testid={`col-${ci}`} className={`flex min-h-[4rem] flex-col rounded-lg ${target && empty ? 'ring-2 ring-das' : ''}`}
+            <div key={ci} data-testid={`col-${ci}`} data-drop={`col:${ci}`} className="flex min-h-[4rem] flex-col rounded-lg"
               onClick={() => empty && b.moveTo({ kind: 'column', col: ci })}>
               {empty && <div className="flex h-[3.25rem] items-center justify-center rounded-lg border border-dashed border-muted/25 text-[10px] text-muted">pusta</div>}
               {col.faceDown.map((_, i) => <CardBack key={`d${i}`} />)}
@@ -206,11 +205,12 @@ function Board({ profile, deal, par, moveLimit, duelDay, duelPractice, onRetry }
                 const depth = col.faceUp.length - i;
                 const isTop = i === col.faceUp.length - 1;
                 const selected = !!sel && sel.kind === 'column' && sel.col === ci && depth <= sel.depth;
+                const dragged = dnd.drag?.source.kind === 'column' && dnd.drag.source.col === ci && depth <= dnd.drag.source.depth;
                 return (
-                  <div key={card} data-testid={`col-${ci}-up-${i}`} className={isTop ? '' : '-mb-7'}>
+                  <div key={card} data-testid={`col-${ci}-up-${i}`} className={`touch-none ${isTop ? '' : '-mb-7'} ${dragged ? 'opacity-30' : ''}`}
+                    onPointerDown={(e) => dnd.press(e, b.sourceAt(ci, i), col.faceUp.slice(i))}>
                     {renderCard(card, {
                       selected,
-                      target: isTop && target,
                       stacked: !isTop,
                       // with a selection: try to move here; if that is not legal, select this card instead
                       onTap: () => {
@@ -232,11 +232,11 @@ function Board({ profile, deal, par, moveLimit, duelDay, duelPractice, onRetry }
           className="flex h-[3.25rem] items-center justify-center rounded-lg border border-muted/30 bg-gradient-to-br from-accent/40 to-accent/20 text-sm font-semibold">
           {b.state.stock.length ? `🂠 ${b.state.stock.length}` : '↺'}
         </button>
-        <div data-testid="waste">
+        <div data-testid="waste" className={`touch-none ${dnd.drag?.source.kind === 'waste' ? 'opacity-30' : ''}`}
+          onPointerDown={(e) => b.state.waste.length && dnd.press(e, { kind: 'waste' }, [b.state.waste[b.state.waste.length - 1]])}>
           {b.state.waste.length ? (
             renderCard(b.state.waste[b.state.waste.length - 1], {
               selected: sel?.kind === 'waste',
-              target: false,
               onTap: () => b.select({ kind: 'waste' }),
               stacked: false,
             })
@@ -250,6 +250,16 @@ function Board({ profile, deal, par, moveLimit, duelDay, duelPractice, onRetry }
           </Button>
         </div>
       </div>
+
+      {dnd.drag && (
+        <div aria-hidden className="pointer-events-none fixed z-40 drop-shadow-xl" style={{ left: dnd.drag.x - dnd.drag.dx, top: dnd.drag.y - dnd.drag.dy, width: dnd.drag.width }}>
+          {dnd.drag.cards.map((card, i) => (
+            <div key={card} className={i < dnd.drag!.cards.length - 1 ? '-mb-7' : ''}>
+              {renderCard(card, { selected: false, stacked: i < dnd.drag!.cards.length - 1, onTap: () => {} })}
+            </div>
+          ))}
+        </div>
+      )}
 
       {peekCard && <PeekSheet wordId={peekCard} showPl={profile.showPl} onClose={() => setPeekCard(null)} />}
       {result && (

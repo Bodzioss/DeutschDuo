@@ -62,17 +62,29 @@ describe('moves', () => {
     expect(() => applyMove(deal, s, mv({ type: 'move', from: { kind: 'waste' }, to: { kind: 'slot', slot: 0 } }))).toThrow();
   });
   test('stacking on the tableau needs the same category; any card goes to an empty column', () => {
-    const s = initialState(deal);
-    // a1 (A) onto cat:A (A): ok
-    const s1 = applyMove(deal, s, mv({ type: 'move', from: { kind: 'column', col: 1, depth: 1 }, to: { kind: 'column', col: 0 } }));
-    expect(col(s1, 0).faceUp).toEqual(['cat:A', 'w:a1']);
-    expect(col(s1, 1)).toEqual({ faceDown: [], faceUp: [] });
+    let s = initialState(deal);
+    // a1 (A) to the empty column, then a2 is revealed under b2 later
+    s = applyMove(deal, s, mv({ type: 'move', from: { kind: 'column', col: 1, depth: 1 }, to: { kind: 'column', col: 3 } }));
+    expect(col(s, 3).faceUp).toEqual(['w:a1']);
     // b2 (B) onto a1 (A): illegal
-    expect(() => applyMove(deal, s1, mv({ type: 'move', from: { kind: 'column', col: 2, depth: 1 }, to: { kind: 'column', col: 0 } }))).toThrow();
-    // a run of same-category cards moves together to an empty column
-    const s2 = applyMove(deal, s1, mv({ type: 'move', from: { kind: 'column', col: 0, depth: 2 }, to: { kind: 'column', col: 1 } }));
-    expect(col(s2, 1).faceUp).toEqual(['cat:A', 'w:a1']);
-    expect(col(s2, 0).faceUp).toEqual(['w:b1']);
+    expect(() => applyMove(deal, s, mv({ type: 'move', from: { kind: 'column', col: 2, depth: 1 }, to: { kind: 'column', col: 3 } }))).toThrow();
+    // b2 to the (now empty) column 1 reveals a2, which stacks on a1 (same category)
+    s = applyMove(deal, s, mv({ type: 'move', from: { kind: 'column', col: 2, depth: 1 }, to: { kind: 'column', col: 1 } }));
+    s = applyMove(deal, s, mv({ type: 'move', from: { kind: 'column', col: 2, depth: 1 }, to: { kind: 'column', col: 3 } }));
+    expect(col(s, 3).faceUp).toEqual(['w:a1', 'w:a2']);
+    // a run of same-category words moves together to an empty column
+    const s2 = applyMove(deal, s, mv({ type: 'move', from: { kind: 'column', col: 3, depth: 2 }, to: { kind: 'column', col: 2 } }));
+    expect(col(s2, 2).faceUp).toEqual(['w:a1', 'w:a2']);
+  });
+  test('a category card on the tableau is not a pile: nothing goes onto it, and it goes only to a slot or an empty column', () => {
+    const s = initialState(deal);
+    // a1 (A) onto cat:A: illegal
+    expect(() => applyMove(deal, s, mv({ type: 'move', from: { kind: 'column', col: 1, depth: 1 }, to: { kind: 'column', col: 0 } }))).toThrow();
+    // cat:A onto a1 (A): illegal
+    expect(() => applyMove(deal, s, mv({ type: 'move', from: { kind: 'column', col: 0, depth: 1 }, to: { kind: 'column', col: 1 } }))).toThrow();
+    // cat:A to an empty column: ok
+    const s1 = applyMove(deal, s, mv({ type: 'move', from: { kind: 'column', col: 0, depth: 1 }, to: { kind: 'column', col: 3 } }));
+    expect(col(s1, 3).faceUp).toEqual(['cat:A']);
   });
   test('cannot move a run of mixed categories or onto the same column', () => {
     let s = initialState(deal);

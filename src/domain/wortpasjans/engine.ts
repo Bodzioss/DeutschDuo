@@ -99,8 +99,11 @@ function check(deal: Deal, s: GameState, m: Move): string | null {
   const target = s.columns[m.to.col];
   if (!target) return 'no such column';
   if (!target.faceDown.length && !target.faceUp.length) return null;
+  // a category card is not a pile: it waits for a slot (or an empty column), and nothing is stacked on it
+  if (isCategoryCard(cards[0])) return 'category card goes to a slot or an empty column';
   const top = target.faceUp[target.faceUp.length - 1];
-  return top && categoryOf(deal, top) === cat ? null : 'different category';
+  if (!top || isCategoryCard(top)) return 'nothing goes onto a category card';
+  return categoryOf(deal, top) === cat ? null : 'different category';
 }
 
 export function applyMove(deal: Deal, state: GameState, m: Move): GameState {
