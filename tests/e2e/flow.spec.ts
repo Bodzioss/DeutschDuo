@@ -33,9 +33,9 @@ test('typing card (EN→DE) shows the answer field and umlaut keys', async ({ pa
   await studyNewCards(page, 1);
   // force the unlocked EN→DE card to be due now, then start a session again
   await page.evaluate(async () => {
-    const dbs = await indexedDB.databases();
-    const name = dbs.map((d) => d.name).find((n) => n?.startsWith('duo-') && n !== 'duo-global')!;
-    await new Promise<void>((resolve, reject) => {
+    // every profile DB on the device (the partner's is there too since Etap 3) — only ours has an EN→DE card
+    const names = (await indexedDB.databases()).map((d) => d.name).filter((n): n is string => !!n && n.startsWith('duo-') && n !== 'duo-global');
+    for (const name of names) await new Promise<void>((resolve, reject) => {
       const req = indexedDB.open(name);
       req.onsuccess = () => {
         const tx = req.result.transaction('cards', 'readwrite');
