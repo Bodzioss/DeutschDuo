@@ -104,7 +104,7 @@ function Board({ profile, deal, par, moveLimit, onRetry }: { profile: Profile; d
   const isTarget = (t: { kind: 'slot'; slot: number } | { kind: 'column'; col: number }) =>
     b.targets.some((x) => x.kind === t.kind && (x.kind === 'slot' ? t.kind === 'slot' && x.slot === t.slot : t.kind === 'column' && x.col === t.col));
 
-  const renderCard = (card: CardId, opts: { selected: boolean; target: boolean; onTap: () => void }) => {
+  const renderCard = (card: CardId, opts: { selected: boolean; target: boolean; onTap: () => void; stacked?: boolean }) => {
     if (isCategoryCard(card)) {
       const c = catLabel.get(categoryOf(deal, card))!;
       return <CategoryCard label={c.label} hint={c.hint} {...opts} />;
@@ -170,7 +170,12 @@ function Board({ profile, deal, par, moveLimit, onRetry }: { profile: Profile; d
                     {renderCard(card, {
                       selected,
                       target: isTop && target,
-                      onTap: () => (b.selected && !(sel?.kind === 'column' && sel.col === ci) ? b.moveTo({ kind: 'column', col: ci }) : b.selectInColumn(ci, i)),
+                      stacked: !isTop,
+                      // with a selection: try to move here; if that is not legal, select this card instead
+                      onTap: () => {
+                        if (b.selected && !(sel?.kind === 'column' && sel.col === ci) && b.moveTo({ kind: 'column', col: ci })) return;
+                        b.selectInColumn(ci, i);
+                      },
                     })}
                   </div>
                 );
@@ -192,6 +197,7 @@ function Board({ profile, deal, par, moveLimit, onRetry }: { profile: Profile; d
               selected: sel?.kind === 'waste',
               target: false,
               onTap: () => b.select({ kind: 'waste' }),
+              stacked: false,
             })
           ) : (
             <div className="h-[3.25rem] rounded-lg border border-dashed border-muted/25" />
@@ -213,7 +219,7 @@ function Board({ profile, deal, par, moveLimit, onRetry }: { profile: Profile; d
           levelId={deal.level}
           onPractise={async () => {
             await startWords(profile, b.peeked);
-            navigate('/review');
+            navigate('/review?practice=1');
           }}
           onRetry={onRetry}
         />

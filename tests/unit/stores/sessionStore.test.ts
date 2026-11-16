@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'vitest';
-import { isResumable } from '@/stores/sessionStore';
+import { isResumable, resolveReviewStart } from '@/stores/sessionStore';
 import { localDay } from '@/domain/day';
 import { useSessionStore } from '@/stores/sessionStore';
 import { openProfileDb } from '@/data/db';
@@ -103,5 +103,21 @@ describe('practise session from chosen words', () => {
     await useSessionStore.getState().startWords(profile, ['danke', 'bitte']);
     await useSessionStore.getState().answer(4);
     expect(isResumable(useSessionStore.getState(), profile.id, new Date())).toBe(false);
+  });
+});
+
+describe('explicit session intent', () => {
+  test('resolveReviewStart: daily intent never resumes a practice session', () => {
+    const s = { kind: 'practice' as const, profileId: profile.id, builtForDay: localDay(new Date()), done: false, queue: [{} as never], index: 0 };
+    expect(resolveReviewStart(s, profile.id, 'daily', new Date())).toBe('start-daily');
+    expect(resolveReviewStart(s, profile.id, 'practice', new Date())).toBe('resume');
+  });
+  test('resolveReviewStart: a resumable daily session is resumed for daily intent', () => {
+    const s = { kind: 'daily' as const, profileId: profile.id, builtForDay: localDay(new Date()), done: false, queue: [{} as never, {} as never], index: 1 };
+    expect(resolveReviewStart(s, profile.id, 'daily', new Date())).toBe('resume');
+  });
+  test('resolveReviewStart: practice intent without an open practice session falls back to daily', () => {
+    const s = { kind: 'daily' as const, profileId: profile.id, builtForDay: localDay(new Date()), done: true, queue: [], index: 0 };
+    expect(resolveReviewStart(s, profile.id, 'practice', new Date())).toBe('start-daily');
   });
 });

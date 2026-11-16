@@ -110,3 +110,17 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 export function isResumable(s: Pick<SessionState, 'profileId' | 'builtForDay' | 'done' | 'queue' | 'index' | 'kind'>, profileId: string, now: Date): boolean {
   return s.kind === 'daily' && s.profileId === profileId && s.builtForDay === localDay(now) && !s.done && s.index < s.queue.length;
 }
+
+/**
+ * What the review screen should do when opened with an intent: daily (from Heute) never resumes a practice
+ * session; practice (from a game summary) resumes the open practice session.
+ */
+export function resolveReviewStart(
+  s: Pick<SessionState, 'profileId' | 'builtForDay' | 'done' | 'queue' | 'index' | 'kind'>,
+  profileId: string,
+  intent: 'daily' | 'practice',
+  now: Date,
+): 'resume' | 'start-daily' {
+  if (intent === 'practice') return s.kind === 'practice' && s.profileId === profileId && !s.done && s.index < s.queue.length ? 'resume' : 'start-daily';
+  return isResumable(s, profileId, now) ? 'resume' : 'start-daily';
+}

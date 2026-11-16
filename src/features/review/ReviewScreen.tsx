@@ -3,8 +3,8 @@ import type { Grade } from '@/domain/types';
 import { formatInterval, intervalsFor } from '@/domain/intervals';
 import { newCard } from '@/domain/fsrs';
 import { openProfileDb } from '@/data/db';
-import { Link, useNavigate } from 'react-router-dom';
-import { isResumable, useSessionStore } from '@/stores/sessionStore';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { resolveReviewStart, useSessionStore } from '@/stores/sessionStore';
 import { useCurrentProfile } from '@/stores/profileStore';
 import { getWord } from '@/data/words';
 import { ProgressBar } from '@/ui/ProgressBar';
@@ -15,14 +15,14 @@ import { EnDeCard } from './EnDeCard';
 export function ReviewScreen() {
   const profile = useCurrentProfile();
   const navigate = useNavigate();
-  const { queue, index, done, start, answer } = useSessionStore();
+  const { queue, index, done, start, answer, kind } = useSessionStore();
+  const [params] = useSearchParams();
+  const intent = params.get('practice') === '1' ? 'practice' : 'daily';
 
   useEffect(() => {
     // Resume only a same-day, same-profile, unfinished session; otherwise build today's queue.
-    const s = useSessionStore.getState();
-    const practiceOpen = s.kind === 'practice' && s.profileId === profile?.id && !s.done;
-    if (profile && !practiceOpen && !isResumable(s, profile.id, new Date())) void start(profile);
-  }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (profile && resolveReviewStart(useSessionStore.getState(), profile.id, intent, new Date()) === 'start-daily') void start(profile);
+  }, [profile?.id, intent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // "Dobrze · 10 min": what each rating button will schedule for the current card
   const current = queue[index];
@@ -61,9 +61,9 @@ export function ReviewScreen() {
       {done || !item || !word ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
           <div className="text-6xl">🎉</div>
-          <h1 className="text-2xl font-semibold">Na dziś wszystko!</h1>
+          <h1 className="text-2xl font-semibold">{kind === 'practice' ? 'Powtórka zrobiona!' : 'Na dziś wszystko!'}</h1>
           <p className="text-muted">Gut gemacht, {profile.displayName}.</p>
-          <Button onClick={() => navigate('/')}>Wróć do Heute</Button>
+          <Button onClick={() => navigate(kind === 'practice' ? '/game' : '/')}>{kind === 'practice' ? 'Wróć do gry' : 'Wróć do Heute'}</Button>
         </div>
       ) : item.direction === 'de_en' ? (
         <DeEnCard key={`${item.cardId}-${index}`} word={word} showPl={profile.showPl} hints={hints} onRate={(g) => answer(g)} />
