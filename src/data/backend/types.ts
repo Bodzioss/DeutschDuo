@@ -36,4 +36,9 @@ export interface Backend {
   /** Finished Wortpasjans boards; append-only, idempotent by id (like reviews). */
   pushGames(profileId: string, games: GameRecord[]): Promise<void>;
   pullGames(profileId: string, since: Cursor): Promise<{ rows: GameRecord[]; cursor: Cursor }>;
+  /** Registers this device for Web Push for a profile; moves the endpoint when it already belongs to another profile. */
+  savePushSubscription(profileId: string, sub: { endpoint: string; p256dh: string; auth: string; tz: string }): Promise<void>;
+  deletePushSubscription(endpoint: string): Promise<void>;
+  /** Best effort nudge to the partner (duel / overtake). Never throws. */
+  notifyPartner(e: { kind: 'duel' | 'overtake'; from: string; to: string; duelBothPlayed?: boolean }): Promise<void>;
 }

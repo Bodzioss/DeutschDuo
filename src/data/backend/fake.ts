@@ -1,4 +1,4 @@
-import type { CardRecord, GameRecord, Profile, ReviewRecord } from '@/domain/types';
+import { DEFAULT_NOTIFY, type CardRecord, type GameRecord, type Profile, type ReviewRecord } from '@/domain/types';
 import { BackendError, type Backend, type Cursor } from './types';
 
 /** In-browser stand-in for Supabase (tests, E2E, offline dev). The "cloud" lives in localStorage. */
@@ -15,8 +15,8 @@ interface Cloud {
 }
 
 const DEFAULT_PROFILES: Profile[] = [
-  { id: '00000000-0000-4000-8000-00000000000a', displayName: 'Nikola', dailyGoalMin: 15, newPerDay: 10, showPl: true },
-  { id: '00000000-0000-4000-8000-00000000000b', displayName: 'Marcin', dailyGoalMin: 15, newPerDay: 10, showPl: true },
+  { id: '00000000-0000-4000-8000-00000000000a', displayName: 'Nikola', dailyGoalMin: 15, newPerDay: 10, showPl: true, notify: DEFAULT_NOTIFY },
+  { id: '00000000-0000-4000-8000-00000000000b', displayName: 'Marcin', dailyGoalMin: 15, newPerDay: 10, showPl: true, notify: DEFAULT_NOTIFY },
 ];
 
 function load(): Cloud {
@@ -61,6 +61,9 @@ export function createFakeBackend(): Backend {
       c.profiles = c.profiles.map((x) => (x.id === p.id ? p : x));
       save(c);
     },
+    async savePushSubscription() {},
+    async deletePushSubscription() {},
+    async notifyPartner() {},
     async pushReviews(profileId, reviews) {
       guard();
       const c = load();

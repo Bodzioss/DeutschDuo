@@ -143,3 +143,37 @@ describe('0001_init.sql', () => {
     expect(r).toEqual({ d: '2026-11-16' });
   });
 });
+
+describe('0005_notifications.sql', () => {
+  const sub = (ep: string, pid: string) => [ep, pid, 'p256', 'authkey'];
+  const ins = `insert into push_subscriptions (endpoint, profile_id, p256dh, auth) values ($1, $2, $3, $4)`;
+
+  test('owner can insert a subscription for own profile; another user cannot', async () => {
+    await as(U1, ins, sub('https://push/a', P1));
+    await expect(as(U2, ins, sub('https://push/b', P1))).rejects.toThrow(/row-level security/);
+    expect((await as(U1, `select endpoint, tz from push_subscriptions`)).rows).toEqual([{ endpoint: 'https://push/a', tz: 'Europe/Warsaw' }]);
+    expect((await as(U2, `select endpoint from push_subscriptions`)).rows).toEqual([]);
+  });
+
+  test('upsert on endpoint moves the subscription to another profile of the same owner', async () => {
+    const P1b = (await db.query<{ id: string }>(`insert into profiles (owner_id, display_name) values ('${U1}', 'Marcin') returning id`)).rows[0].id;
+    await as(U1, `${ins} on conflict (endpoint) do update set profile_id = excluded.profile_id`, sub('https://push/a', P1b));
+    expect((await as(U1, `select profile_id from push_subscriptions where endpoint = 'https://push/a'`)).rows).toEqual([{ profile_id: P1b }]);
+  });
+
+  test('owner can delete own subscription', async () => {
+    await as(U1, `delete from push_subscriptions where endpoint = 'https://push/a'`);
+    expect((await as(U1, `select 1 from push_subscriptions`)).rows).toEqual([]);
+  });
+
+  test('authenticated cannot read notifications_sent', async () => {
+    await expect(as(U1, `select * from notifications_sent`)).rejects.toThrow(/permission denied/);
+    await expect(as(U1, `insert into notifications_sent (profile_id, day, kind) values ($1, '2026-11-16', 'goal')`, [P1])).rejects.toThrow(/permission denied/);
+  });
+
+  test('notify_goal_hour must be 6..22; defaults per spec', async () => {
+    await expect(as(U1, `update profiles set notify_goal_hour = 23 where id = $1`, [P1])).rejects.toThrow(/check/);
+    expect((await as(U1, `select notify_goal, notify_goal_hour, notify_streak, notify_partner from profiles where id = $1`, [P1])).rows)
+      .toEqual([{ notify_goal: true, notify_goal_hour: 19, notify_streak: true, notify_partner: true }]);
+  });
+});

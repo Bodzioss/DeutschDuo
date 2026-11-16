@@ -1,5 +1,5 @@
 import { createClient, isAuthRetryableFetchError, type SupabaseClient } from '@supabase/supabase-js';
-import type { CardRecord, Direction, FsrsState, GameRecord, Grade, Profile, ReviewRecord } from '@/domain/types';
+import { notifyPrefs, type CardRecord, type Direction, type FsrsState, type GameRecord, type Grade, type Profile, type ReviewRecord } from '@/domain/types';
 import { BackendError, type Backend, type Cursor } from './types';
 
 const PAGE = 1000;
@@ -24,7 +24,8 @@ export function parseCursor(c: Cursor): { seq: number; changedAfter: string | nu
   };
 }
 
-type ProfileRow = { id: string; display_name: string; daily_goal_min: number; new_per_day: number; show_pl: boolean };
+type ProfileRow = { id: string; display_name: string; daily_goal_min: number; new_per_day: number; show_pl: boolean;
+  notify_goal: boolean; notify_goal_hour: number; notify_streak: boolean; notify_partner: boolean };
 type CardRow = { card_id: string; word_id: string; direction: Direction; fsrs: FsrsState; updated_at: string; server_seq: number; changed_at: string };
 type ReviewRow = {
   id: string; card_id: string; rating: Grade; duration_ms: number; reviewed_at: string; local_day: string;
@@ -43,6 +44,7 @@ const toGame = (r: GameRow): GameRecord => ({
 
 const toProfile = (r: ProfileRow): Profile => ({
   id: r.id, displayName: r.display_name, dailyGoalMin: r.daily_goal_min, newPerDay: r.new_per_day, showPl: r.show_pl,
+  notify: { goal: r.notify_goal, goalHour: r.notify_goal_hour, streak: r.notify_streak, partner: r.notify_partner },
 });
 const toCard = (r: CardRow): CardRecord => ({
   id: r.card_id, wordId: r.word_id, direction: r.direction, fsrs: r.fsrs, updatedAt: new Date(r.updated_at).toISOString(), dirty: 0,
@@ -146,16 +148,38 @@ export function createSupabaseBackend(url: string, anonKey: string, pairEmail: s
       await sb.auth.signOut({ scope: 'local' });
     },
     async fetchProfiles() {
-      const { data, error } = await sb.from('profiles').select('id, display_name, daily_goal_min, new_per_day, show_pl').order('created_at');
+      const { data, error } = await sb.from('profiles').select('id, display_name, daily_goal_min, new_per_day, show_pl, notify_goal, notify_goal_hour, notify_streak, notify_partner').order('created_at');
       if (error) fail(error);
       return (data as ProfileRow[]).map(toProfile);
     },
     async updateProfile(p) {
+      const n = notifyPrefs(p);
       const { error } = await sb
         .from('profiles')
-        .update({ display_name: p.displayName, daily_goal_min: p.dailyGoalMin, new_per_day: p.newPerDay, show_pl: p.showPl })
+        .update({
+          display_name: p.displayName, daily_goal_min: p.dailyGoalMin, new_per_day: p.newPerDay, show_pl: p.showPl,
+          notify_goal: n.goal, notify_goal_hour: n.goalHour, notify_streak: n.streak, notify_partner: n.partner,
+        })
         .eq('id', p.id);
       if (error) fail(error);
+    },
+    async savePushSubscription(profileId, sub) {
+      const { error } = await sb.from('push_subscriptions').upsert(
+        { endpoint: sub.endpoint, profile_id: profileId, p256dh: sub.p256dh, auth: sub.auth, tz: sub.tz, updated_at: new Date().toISOString() },
+        { onConflict: 'endpoint' },
+      );
+      if (error) fail(error);
+    },
+    async deletePushSubscription(endpoint) {
+      const { error } = await sb.from('push_subscriptions').delete().eq('endpoint', endpoint);
+      if (error) fail(error);
+    },
+    async notifyPartner(e) {
+      try {
+        await sb.functions.invoke('notify', { body: { mode: 'partner', ...e } });
+      } catch {
+        /* a nicety, never blocks anything */
+      }
     },
     async pushReviews(profileId, reviews) {
       if (!reviews.length) return;

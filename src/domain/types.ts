@@ -87,6 +87,12 @@ export interface Profile {
   dailyGoalMin: number;
   newPerDay: number;
   showPl: boolean;
+  /** Optional: profiles cached before Etap 4a have none. Read through notifyPrefs(). */
+  notify?: NotifyPrefs;
 }
+
+export interface NotifyPrefs { goal: boolean; goalHour: number; streak: boolean; partner: boolean }
+export const DEFAULT_NOTIFY: NotifyPrefs = { goal: true, goalHour: 19, streak: true, partner: true };
+export const notifyPrefs = (p: Profile): NotifyPrefs => ({ ...DEFAULT_NOTIFY, ...p.notify });
 
 export const cardId = (wordId: string, d: Direction) => `${wordId}:${d}`;
