@@ -31,3 +31,10 @@ describe('games', () => {
     expect(await db.cards.count()).toBe(0);
   });
 });
+
+describe('duel games', () => {
+  test('recordGame keeps the duel day', async () => {
+    const g = await recordGame(db, { level: 'berlin-2', seed: 9, won: true, stars: 2, moves: 30, par: 20, peeks: 0, peekedWordIds: [], durationMs: 1, duelDay: '2026-11-16', now });
+    expect((await db.games.get(g.id))!.duelDay).toBe('2026-11-16');
+  });
+});

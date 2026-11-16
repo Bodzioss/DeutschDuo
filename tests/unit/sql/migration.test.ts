@@ -134,4 +134,12 @@ describe('0001_init.sql', () => {
     await expect(as(U1, `update game_sessions set stars = 1 where id = $1`, [id])).rejects.toThrow(/permission denied/);
     await expect(as(U1, ins.replace(' on conflict (id) do nothing', ''), ['66666666-6666-4666-8666-666666666666', P2])).rejects.toThrow(/row-level security/);
   });
+
+  test('0004: game_sessions store the duel day', async () => {
+    const id = '77777777-7777-4777-8777-777777777777';
+    await as(U1, `insert into game_sessions (id, profile_id, level, seed, won, stars, moves, par, peeks, duration_ms, played_at, local_day, duel_day)
+                  values ($1, $2, 'berlin-2', 9, true, 2, 30, 20, 0, 1000, now(), '2026-11-16', '2026-11-16')`, [id, P1]);
+    const r = (await as(U1, `select to_char(duel_day, 'YYYY-MM-DD') as d from game_sessions where id = $1`, [id])).rows[0];
+    expect(r).toEqual({ d: '2026-11-16' });
+  });
 });

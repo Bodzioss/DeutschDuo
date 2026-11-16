@@ -33,11 +33,12 @@ type ReviewRow = {
 
 type GameRow = {
   id: string; level: string; seed: number; won: boolean; stars: number; moves: number; par: number; peeks: number;
-  peeked_word_ids: string[]; duration_ms: number; played_at: string; local_day: string; server_seq: number; changed_at: string;
+  peeked_word_ids: string[]; duration_ms: number; played_at: string; local_day: string; duel_day: string | null; server_seq: number; changed_at: string;
 };
 const toGame = (r: GameRow): GameRecord => ({
   id: r.id, level: r.level, seed: r.seed, won: r.won, stars: r.stars, moves: r.moves, par: r.par, peeks: r.peeks,
   peekedWordIds: r.peeked_word_ids ?? [], durationMs: r.duration_ms, playedAt: new Date(r.played_at).toISOString(), localDay: r.local_day, synced: 1,
+  ...(r.duel_day ? { duelDay: r.duel_day } : {}),
 });
 
 const toProfile = (r: ProfileRow): Profile => ({
@@ -185,6 +186,7 @@ export function createSupabaseBackend(url: string, anonKey: string, pairEmail: s
       const rows = games.map((g) => ({
         id: g.id, profile_id: profileId, level: g.level, seed: g.seed, won: g.won, stars: g.stars, moves: g.moves, par: g.par,
         peeks: g.peeks, peeked_word_ids: g.peekedWordIds, duration_ms: g.durationMs, played_at: g.playedAt, local_day: g.localDay,
+        duel_day: g.duelDay ?? null,
       }));
       const { error } = await sb.from('game_sessions').upsert(rows, { onConflict: 'id', ignoreDuplicates: true });
       if (error) fail(error);
@@ -192,7 +194,7 @@ export function createSupabaseBackend(url: string, anonKey: string, pairEmail: s
     async pullGames(profileId, since) {
       const r = await pull<GameRow>(
         'game_sessions',
-        'id, level, seed, won, stars, moves, par, peeks, peeked_word_ids, duration_ms, played_at, local_day',
+        'id, level, seed, won, stars, moves, par, peeks, peeked_word_ids, duration_ms, played_at, local_day, duel_day',
         profileId,
         since,
       );

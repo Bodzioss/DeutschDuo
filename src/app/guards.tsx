@@ -47,8 +47,9 @@ export function AuthGate() {
 /** Layout route: a profile must be chosen on this device. Runs background sync for it. */
 export function ProfileGate() {
   const currentId = useProfileStore((s) => s.currentId);
+  const partnerIds = useProfileStore((s) => s.profiles.filter((p) => p.id !== s.currentId).map((p) => p.id).join(','));
   const location = useLocation();
-  useSync(currentId);
+  useSync(currentId, partnerIds ? partnerIds.split(',') : []);
   if (!currentId) return <Navigate to="/who" replace state={{ from: location.pathname }} />;
   return <Outlet />;
 }

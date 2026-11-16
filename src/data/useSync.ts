@@ -59,12 +59,17 @@ export const syncNow = createSyncScheduler(async (profileId) => {
   }
 });
 
-/** Background sync for the current profile: on start, after a session, when back online/visible, and every 5 min. */
-export function useSync(profileId: string | null): void {
+/**
+ * Background sync for the current profile: on start, after a session, when back online/visible, and every 5 min.
+ * Partner profiles are pulled too (read-only on this device) so the league and duels work offline from the last sync.
+ */
+export function useSync(profileId: string | null, partnerIds: string[] = []): void {
+  const partners = partnerIds.join(',');
   useEffect(() => {
     if (!profileId) return;
     const run = () => {
-      if (navigator.onLine !== false) void syncNow(profileId);
+      if (navigator.onLine === false) return;
+      void syncNow(profileId).then(() => Promise.all(partners.split(',').filter(Boolean).map((id) => syncNow(id))));
     };
     run();
     const offEnd = onSessionEnd(run);
@@ -85,5 +90,5 @@ export function useSync(profileId: string | null): void {
       document.removeEventListener('visibilitychange', onVisible);
       clearInterval(timer);
     };
-  }, [profileId]);
+  }, [profileId, partners]);
 }

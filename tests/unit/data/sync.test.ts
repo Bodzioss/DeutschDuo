@@ -135,3 +135,19 @@ describe('game sync', () => {
     expect((await d2.games.toArray())[0]).toMatchObject({ level: 'berlin-1', seed: 7, stars: 3, synced: 1 });
   });
 });
+
+describe('partner data', () => {
+  test("my device pulls the partner's reviews and games into the partner's local DB and pushes nothing", async () => {
+    const { recordGame } = await import('@/data/games');
+    const partnerId = (await cloud.fetchProfiles())[1].id;
+    const partnerPhone = device();
+    await recordReview(partnerPhone, { item: item('a'), grade: 3, durationMs: 1000, now: t0, closesQueue: true });
+    await recordGame(partnerPhone, { level: 'berlin-1', seed: 1, won: true, stars: 3, moves: 20, par: 18, peeks: 0, peekedWordIds: [], durationMs: 1, duelDay: '2026-11-16', now: t0 });
+    await syncProfile(partnerPhone, partnerId, cloud);
+
+    const partnerOnMyPhone = device();
+    const r = await syncProfile(partnerOnMyPhone, partnerId, cloud);
+    expect(r).toMatchObject({ pushedReviews: 0, pushedCards: 0, pushedGames: 0, pulledReviews: 1, pulledGames: 1 });
+    expect((await partnerOnMyPhone.games.toArray())[0].duelDay).toBe('2026-11-16');
+  });
+});
