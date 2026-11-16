@@ -22,14 +22,25 @@ import { useBoard } from './useBoard';
 
 /** Builds a personalised solvable deal once per attempt (not on every DB change). */
 function useDeal(levelId: string, cards: CardRecord[] | null, attempt: number, fixedSeed: number | null) {
-  const [g, setG] = useState<ReturnType<typeof generateDeal> | null>(null);
+  const [g, setG] = useState<ReturnType<typeof generateDeal> | 'error' | null>(null);
   useEffect(() => {
     const level = levelById(levelId);
     if (!level || !cards) return;
     const words = getWords();
     // a fixed seed (?seed=…) gives a reproducible board (tests now, duels in Etap 3)
-    const seed = fixedSeed !== null && attempt === 0 ? fixedSeed : (Date.now() + attempt * 7919) % 2_147_483_647;
-    setG(generateDeal(seed, level, { words, rank: srsRank(words, cards, new Date()) }));
+    const seed = fixedSeed !== null && attempt === 0 ? fixedSeed : (Date.now() + attempt * 7919) % 2_000_000_000;
+    const intro = new Map(words.map((w, i) => [w.id, i]));
+    try {
+      setG(generateDeal(seed, level, { words, rank: srsRank(words, cards, new Date()) }));
+    } catch (e) {
+      console.warn('personal deal failed, falling back to introduction order', e);
+      try {
+        setG(generateDeal(seed, level, { words, rank: (w) => intro.get(w.id) ?? 0 }));
+      } catch (e2) {
+        console.error('no deal', e2);
+        setG('error');
+      }
+    }
   }, [levelId, attempt, cards === null]); // eslint-disable-line react-hooks/exhaustive-deps
   return g;
 }
@@ -43,6 +54,7 @@ export function BoardScreen() {
   const fixedSeed = params.get('seed') !== null && /^\d+$/.test(params.get('seed')!) ? Number(params.get('seed')) : null;
   const g = useDeal(level, data?.cards ?? null, attempt, fixedSeed);
   if (!levelById(level)) return <p className="p-6">Nie ma takiej planszy. <Link to="/game" className="text-accent">Mapa</Link></p>;
+  if (g === 'error') return <p className="p-6 text-center">Nie udało się rozdać tej planszy. <Link to="/game" className="text-accent">Wróć do mapy</Link></p>;
   if (!profile || !g) return <p className="p-6 text-center text-muted">Tasuję karty…</p>;
   return <Board key={`${g.deal.seed}-${attempt}`} profile={profile} deal={g.deal} par={g.par} moveLimit={g.moveLimit} onRetry={() => setAttempt((a) => a + 1)} />;
 }

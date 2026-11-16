@@ -28,7 +28,8 @@ function priority(s: GameState, m: Move): number {
   return m.from.kind === 'waste' ? 2 : 2.5;
 }
 
-export function solve(deal: Deal, budget = 200_000): { solvable: boolean; par: number; moves: Move[] } {
+/** Real deals solve within a few thousand nodes; the budget caps the worst case on slow phones. */
+export function solve(deal: Deal, budget = 40_000): { solvable: boolean; par: number; moves: Move[] } {
   const seen = new Set<string>();
   const path: Move[] = [];
   let nodes = 0;

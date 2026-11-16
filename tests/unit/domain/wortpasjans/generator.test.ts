@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'vitest';
+import { srsRank } from '@/domain/wortpasjans/pool';
+import { newCard } from '@/domain/fsrs';
 import { solve } from '@/domain/wortpasjans/solver';
 import { generateDeal, type WordPool } from '@/domain/wortpasjans/generator';
 import { applyMove, initialState, isWon, type Deal } from '@/domain/wortpasjans/engine';
@@ -68,17 +70,46 @@ describe('generateDeal', () => {
     expect(deal.categories.some((c) => !c.id.startsWith('topic-'))).toBe(true);
   });
 
-  test('prefers words with a lower rank', () => {
-    const preferred = new Set(['das-haus', 'der-tisch', 'die-frau', 'hallo', 'danke', 'bitte']);
-    const pool: WordPool = { words: getWords(), rank: (w) => (preferred.has(w.id) ? 0 : 100) };
-    const { deal } = generateDeal(9, levelById('berlin-1')!, pool);
-    const used = deal.categories.flatMap((c) => c.wordIds);
-    expect(used.filter((id) => preferred.has(id)).length).toBeGreaterThanOrEqual(3);
+  test('prefers words with a lower rank (e.g. a topic full of due words gets chosen)', () => {
+    const pool: WordPool = { words: getWords(), rank: (w) => (w.topic === 'food-drink' ? 0 : 100 + getWords().indexOf(w)) };
+    for (const seed of [9, 10, 11]) {
+      const { deal } = generateDeal(seed, levelById('berlin-1')!, pool);
+      expect(deal.categories.map((c) => c.id)).toContain('topic-food-drink');
+    }
   });
 
   test('fast enough for a phone (25 levels in well under a few seconds here)', () => {
     const t0 = performance.now();
     for (const l of LEVELS) generateDeal(42, l, introOrder);
     expect(performance.now() - t0).toBeLessThan(5000);
+  });
+});
+
+describe('personal (SRS) pools', () => {
+  const now = new Date(2026, 10, 16, 12);
+  const studied = (count: number, dueShare: number) => {
+    const ws = getWords().slice(0, count);
+    return ws.map((w, i) => {
+      const c = newCard(w.id, 'de_en', now, new Date(now.getTime() + (i % Math.round(1 / dueShare) === 0 ? -60_000 : 5 * 86_400_000)));
+      return { ...c, fsrs: { ...c.fsrs, reps: 3, stability: i % 3 === 0 ? 3 : 20 } };
+    });
+  };
+  test.each([40, 120, 300])('every level generates for many seeds with %i studied words', (count) => {
+    const cards = studied(count, 0.25);
+    const pool: WordPool = { words: getWords(), rank: srsRank(getWords(), cards, now) };
+    for (const l of LEVELS) for (const seed of [1, 2, 3, 4]) expect(() => generateDeal(seed, l, pool)).not.toThrow();
+  });
+  test('different seeds give some variety of categories', () => {
+    const pool: WordPool = { words: getWords(), rank: srsRank(getWords(), studied(120, 0.25), now) };
+    const sets = new Set([1, 2, 3, 4, 5, 6, 7, 8].map((s) => generateDeal(s, levelById('wien-1')!, pool).deal.categories.map((c) => c.id).sort().join()));
+    expect(sets.size).toBeGreaterThanOrEqual(3);
+  });
+  test('boards never use phrases or two cards that read the same', () => {
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const { deal } = generateDeal(seed, levelById('berlin-1')!, introOrder);
+      const ws = deal.categories.flatMap((c) => c.wordIds).map((id) => getWords().find((w) => w.id === id)!);
+      expect(ws.some((w) => w.pos === 'phrase')).toBe(false);
+      expect(new Set(ws.map((w) => w.de.toLowerCase())).size).toBe(ws.length);
+    }
   });
 });

@@ -71,3 +71,26 @@ describe('categories', () => {
     }
   });
 });
+
+describe('plural categories use the real suffix', () => {
+  const cat = (id: string) => ALL_CATEGORIES.find((c) => c.id === id)!;
+  const noun = (de: string, plural: string) => ({ id: de.toLowerCase(), de, plural, article: 'der' as const, pos: 'noun' as const, en: 'x', cefr: 'A1' as const, topic: 't', example_de: 'x', example_en: 'x' });
+  test.each([
+    ['Haus', 'Häuser', 'plural-er'],
+    ['Kind', 'Kinder', 'plural-er'],
+    ['Tisch', 'Tische', 'plural-e'],
+    ['Stuhl', 'Stühle', 'plural-e'],
+    ['Frau', 'Frauen', 'plural-n'],
+    ['Tasche', 'Taschen', 'plural-n'],
+    ['Auto', 'Autos', 'plural-s'],
+  ])('%s → %s is %s', (de, pl, id) => expect(cat(id).test(noun(de, pl))).toBe(true));
+  test.each([
+    ['Vater', 'Väter'],
+    ['Bruder', 'Brüder'],
+    ['Garten', 'Gärten'],
+    ['Museum', 'Museen'],
+    ['Firma', 'Firmen'],
+  ])('%s → %s (umlaut only or replaced ending) is in no plural category', (de, pl) => {
+    expect(['plural-n', 'plural-e', 'plural-er', 'plural-s'].some((id) => cat(id).test(noun(de, pl)))).toBe(false);
+  });
+});

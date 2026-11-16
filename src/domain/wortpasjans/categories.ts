@@ -31,7 +31,17 @@ const TOPICS: Record<string, [string, string]> = {
 };
 
 const isNoun = (w: Word) => w.pos === 'noun';
-const pluralOf = (w: Word) => (isNoun(w) && w.plural && w.plural !== w.de ? w.plural : null);
+const deUmlaut = (s: string) => s.toLowerCase().replace(/ä/g, 'a').replace(/ö/g, 'o').replace(/ü/g, 'u');
+/**
+ * What the plural adds to the singular (umlaut changes ignored): Haus→Häuser "er", Frau→Frauen "en", Tisch→Tische "e".
+ * null when the plural is not singular + suffix (Väter: umlaut only, Museen/Firmen: ending replaced) or missing.
+ */
+function pluralSuffix(w: Word): string | null {
+  if (!isNoun(w) || !w.plural || w.plural === w.de) return null;
+  const s = deUmlaut(w.de);
+  const p = deUmlaut(w.plural);
+  return p.startsWith(s) && p.length > s.length ? p.slice(s.length) : null;
+}
 const prepIn = (ids: string[]) => (w: Word) => w.pos === 'prep' && ids.includes(w.de);
 
 export const ALL_CATEGORIES: Category[] = [
@@ -45,10 +55,10 @@ export const ALL_CATEGORIES: Category[] = [
   { id: 'gender-der', family: 'gender', label: 'Artikel: der', hint: 'rodzaj męski', test: (w) => isNoun(w) && w.article === 'der' },
   { id: 'gender-die', family: 'gender', label: 'Artikel: die', hint: 'rodzaj żeński', test: (w) => isNoun(w) && w.article === 'die' && w.plural !== w.de },
   { id: 'gender-das', family: 'gender', label: 'Artikel: das', hint: 'rodzaj nijaki', test: (w) => isNoun(w) && w.article === 'das' },
-  { id: 'plural-n', family: 'plural', label: 'Plural auf -(e)n', hint: 'l.mn. na -(e)n', test: (w) => !!pluralOf(w)?.endsWith('n') },
-  { id: 'plural-e', family: 'plural', label: 'Plural auf -e', hint: 'l.mn. na -e', test: (w) => !!pluralOf(w)?.endsWith('e') },
-  { id: 'plural-er', family: 'plural', label: 'Plural auf -er', hint: 'l.mn. na -er', test: (w) => !!pluralOf(w)?.endsWith('er') },
-  { id: 'plural-s', family: 'plural', label: 'Plural auf -s', hint: 'l.mn. na -s', test: (w) => !!pluralOf(w)?.endsWith('s') },
+  { id: 'plural-n', family: 'plural', label: 'Plural auf -(e)n', hint: 'l.mn. na -(e)n', test: (w) => ['n', 'en'].includes(pluralSuffix(w) ?? '') },
+  { id: 'plural-e', family: 'plural', label: 'Plural auf -e', hint: 'l.mn. na -e', test: (w) => pluralSuffix(w) === 'e' },
+  { id: 'plural-er', family: 'plural', label: 'Plural auf -er', hint: 'l.mn. na -er', test: (w) => pluralSuffix(w) === 'er' },
+  { id: 'plural-s', family: 'plural', label: 'Plural auf -s', hint: 'l.mn. na -s', test: (w) => pluralSuffix(w) === 's' },
   { id: 'verbs-trennbar', family: 'verbs', label: 'Trennbare Verben', hint: 'czasowniki rozdzielne', test: (w) => w.pos === 'verb' && /trennbar/i.test(w.note ?? '') },
   { id: 'prep-dativ', family: 'preps', label: 'Präpositionen + Dativ', hint: 'przyimki z celownikiem', test: prepIn(['aus', 'bei', 'mit', 'nach', 'seit', 'von', 'zu']) },
   { id: 'prep-akk', family: 'preps', label: 'Präpositionen + Akkusativ', hint: 'przyimki z biernikiem', test: prepIn(['durch', 'für', 'gegen', 'ohne', 'um']) },

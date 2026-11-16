@@ -22,40 +22,62 @@ function columnSizes(total: number): number[] {
   return [0, 1, 2, 3].map((j) => base + (j >= 4 - extra ? 1 : 0));
 }
 
+/** Words that can appear on a board: no phrases or multi-word entries (they make huge cards). */
+const playable = (w: Word) => w.pos !== 'phrase' && !w.de.includes(' ');
+
+/**
+ * Words of `cat` that fit no other category of `set`, best first; homographs ("sein" verb / "sein" his) are skipped
+ * so that two cards never read the same.
+ */
+function exclusiveWords(cat: Category, set: Category[], words: Word[], used: Set<string>, usedDe: Set<string>): Word[] {
+  return words.filter((w) => !used.has(w.id) && !usedDe.has(w.de.toLowerCase()) && cat.test(w) && set.every((o) => o === cat || !o.test(w)));
+}
+
 function pickBoard(level: LevelDef, pool: WordPool, rnd: () => number): { cat: Category; words: Word[] }[] | null {
-  const eligible = categoriesForLevel(level, pool.words);
-  const jitter = new Map(pool.words.map((w) => [w.id, rnd()]));
-  const score = (w: Word) => pool.rank(w) + (jitter.get(w.id) ?? 0);
+  const candidates = pool.words.filter(playable);
+  const eligible = categoriesForLevel(level, candidates);
+  // Ranks can be huge (SRS buckets) — use ordinal positions so the randomness below actually matters.
+  const byPref = [...candidates].sort((a, b) => pool.rank(a) - pool.rank(b));
+  const ordinal = new Map(byPref.map((w, i) => [w.id, i + rnd() * 25]));
+  const ordered = [...candidates].sort((a, b) => ordinal.get(a.id)! - ordinal.get(b.id)!);
   const needGrammar = level.families.some((f) => f !== 'topic');
 
   for (let attempt = 0; attempt < MAX_PICK_TRIES; attempt++) {
-    // categories ranked by how "preferred" their best n words are, with randomness so boards vary
     const ranked = shuffle(eligible, rnd)
       .map((c) => {
-        const best = pool.words.filter(c.test).map(score).sort((a, b) => a - b).slice(0, level.n);
-        return { c, s: best.reduce((a, b) => a + b, 0) / level.n + rnd() * 50 };
+        const best = ordered.filter(c.test).slice(0, level.n).map((w) => ordinal.get(w.id)!);
+        return { c, s: best.reduce((a, b) => a + b, 0) / level.n + rnd() * 120 };
       })
       .sort((a, b) => a.s - b.s)
       .map((x) => x.c);
-
-    let chosen = ranked.slice(0, level.k);
-    if (needGrammar && chosen.every((c) => c.family === 'topic')) {
-      const g = ranked.find((c) => c.family !== 'topic');
-      if (g) chosen = [...chosen.slice(0, level.k - 1), g];
+    if (needGrammar) {
+      const g = ranked.findIndex((c) => c.family !== 'topic');
+      if (g > 0) ranked.unshift(...ranked.splice(g, 1));
     }
+
+    // Greedy: add a category only if every category of the set still has n exclusive words.
+    const set: Category[] = [];
+    for (const c of ranked) {
+      if (set.length === level.k) break;
+      const trial = [...set, c];
+      const used = new Set<string>();
+      const usedDe = new Set<string>();
+      const ok = trial.every((cat) => {
+        const ws = exclusiveWords(cat, trial, ordered, used, usedDe).slice(0, level.n);
+        ws.forEach((w) => (used.add(w.id), usedDe.add(w.de.toLowerCase())));
+        return ws.length === level.n;
+      });
+      if (ok) set.push(c);
+    }
+    if (set.length < level.k) continue;
 
     const used = new Set<string>();
-    const result: { cat: Category; words: Word[] }[] = [];
-    for (const cat of chosen) {
-      const words = pool.words
-        .filter((w) => !used.has(w.id) && cat.test(w) && chosen.every((o) => o === cat || !o.test(w)))
-        .sort((a, b) => score(a) - score(b))
-        .slice(0, level.n);
-      if (words.length < level.n) break;
-      words.forEach((w) => used.add(w.id));
-      result.push({ cat, words });
-    }
-    if (result.length === level.k) return result;
+    const usedDe = new Set<string>();
+    return set.map((cat) => {
+      const words = exclusiveWords(cat, set, ordered, used, usedDe).slice(0, level.n);
+      words.forEach((w) => (used.add(w.id), usedDe.add(w.de.toLowerCase())));
+      return { cat, words };
+    });
   }
   return null;
 }
