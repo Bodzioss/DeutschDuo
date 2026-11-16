@@ -1,4 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import type { Grade } from '@/domain/types';
+import { formatInterval, intervalsFor } from '@/domain/intervals';
+import { newCard } from '@/domain/fsrs';
+import { openProfileDb } from '@/data/db';
 import { Link, useNavigate } from 'react-router-dom';
 import { isResumable, useSessionStore } from '@/stores/sessionStore';
 import { useCurrentProfile } from '@/stores/profileStore';
@@ -17,6 +21,25 @@ export function ReviewScreen() {
     // Resume only a same-day, same-profile, unfinished session; otherwise build today's queue.
     if (profile && !isResumable(useSessionStore.getState(), profile.id, new Date())) void start(profile);
   }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // "Dobrze · 10 min": what each rating button will schedule for the current card
+  const current = queue[index];
+  const [hints, setHints] = useState<Record<Grade, string> | null>(null);
+  useEffect(() => {
+    setHints(null);
+    if (!profile || !current) return;
+    let alive = true;
+    void openProfileDb(profile.id)
+      .cards.get(current.cardId)
+      .then((c) => {
+        const now = new Date();
+        const ms = intervalsFor(c ?? newCard(current.wordId, current.direction, now), now);
+        if (alive) setHints({ 1: formatInterval(ms[1]), 2: formatInterval(ms[2]), 3: formatInterval(ms[3]), 4: formatInterval(ms[4]) });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [profile?.id, current?.cardId, index]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!profile) return null;
   const item = queue[index];
@@ -41,9 +64,9 @@ export function ReviewScreen() {
           <Button onClick={() => navigate('/')}>Wróć do Heute</Button>
         </div>
       ) : item.direction === 'de_en' ? (
-        <DeEnCard key={`${item.cardId}-${index}`} word={word} showPl={profile.showPl} onRate={(g) => answer(g)} />
+        <DeEnCard key={`${item.cardId}-${index}`} word={word} showPl={profile.showPl} hints={hints} onRate={(g) => answer(g)} />
       ) : (
-        <EnDeCard key={`${item.cardId}-${index}`} word={word} showPl={profile.showPl} onRate={(g, a) => answer(g, a)} />
+        <EnDeCard key={`${item.cardId}-${index}`} word={word} showPl={profile.showPl} hints={hints} onRate={(g, a) => answer(g, a)} />
       )}
     </div>
   );

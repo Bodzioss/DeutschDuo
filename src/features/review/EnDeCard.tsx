@@ -18,7 +18,7 @@ const MESSAGES: Record<Verdict, string> = {
   other_word: 'Poprawne słowo, ale szukamy innego — spróbuj jeszcze raz',
 };
 
-export function EnDeCard({ word, showPl, onRate }: { word: Word; showPl: boolean; onRate: (g: Grade, answer: string) => void }) {
+export function EnDeCard({ word, showPl, onRate, hints }: { word: Word; showPl: boolean; onRate: (g: Grade, answer: string) => void; hints?: Record<Grade, string> | null }) {
   const [value, setValue] = useState('');
   const [result, setResult] = useState<ReturnType<typeof checkAnswer> | null>(null);
   const [hint, setHint] = useState<string | null>(null);
@@ -67,7 +67,7 @@ export function EnDeCard({ word, showPl, onRate }: { word: Word; showPl: boolean
       </div>
       <div className="space-y-3 pb-2">
         {result ? (
-          <RatingBar suggested={result.suggested} onRate={(g) => onRate(g, value)} />
+          <RatingBar suggested={result.suggested} hints={hints} onRate={(g) => onRate(g, value)} />
         ) : (
           <form onSubmit={submit} className="space-y-3">
             <input

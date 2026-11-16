@@ -7,7 +7,7 @@ import { speak } from '@/ui/speech';
 import { expectedAnswer } from '@/domain/answerCheck';
 import { RatingBar } from './RatingBar';
 
-export function DeEnCard({ word, showPl, onRate }: { word: Word; showPl: boolean; onRate: (g: Grade) => void }) {
+export function DeEnCard({ word, showPl, onRate, hints }: { word: Word; showPl: boolean; onRate: (g: Grade) => void; hints?: Record<Grade, string> | null }) {
   const [revealed, setRevealed] = useState(false);
   useEffect(() => {
     setRevealed(false);
@@ -37,7 +37,7 @@ export function DeEnCard({ word, showPl, onRate }: { word: Word; showPl: boolean
       </div>
       <div className="pb-2">
         {revealed ? (
-          <RatingBar onRate={onRate} />
+          <RatingBar onRate={onRate} hints={hints} />
         ) : (
           <Button className="w-full" onClick={() => setRevealed(true)}>
             Pokaż
