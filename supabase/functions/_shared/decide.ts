@@ -6,7 +6,9 @@ export interface DayStat { minutes: number; goalMin: number; queueClosed: boolea
 export interface Push { kind: Kind; title: string; body: string; url: '/' | '/para' }
 
 const DAY_START_SHIFT_MIN = 3 * 60;
+// Hard cap of 3 per learning day; one slot is always left for streak.
 const CAP = 3;
+const CAP_NON_STREAK = CAP - 1;
 const GOAL_END = 23 * 60;
 const STREAK_START = 21 * 60 + 30;
 const STREAK_END = 23 * 60 + 30;
@@ -57,6 +59,7 @@ export function decideScheduled(i: {
   if (
     prefs.streak &&
     !sentToday.includes('streak') &&
+    sentToday.length < CAP &&
     m >= STREAK_START &&
     m < STREAK_END &&
     goalMet(i.yesterday)
@@ -74,7 +77,7 @@ export function decideScheduled(i: {
   if (
     prefs.goal &&
     !sentToday.includes('goal') &&
-    sentToday.length < CAP &&
+    sentToday.length < CAP_NON_STREAK &&
     m >= prefs.goalHour * 60 &&
     m < GOAL_END
   ) {
@@ -95,7 +98,7 @@ export function decidePartner(
   i: { now: Date; tz: string; prefs: Prefs; sentToday: Kind[]; partnerName: string; duelBothPlayed?: boolean },
 ): Push | null {
   const { minutesOfDay: m } = localClock(i.now, i.tz);
-  if (!i.prefs.partner || i.sentToday.includes(kind) || i.sentToday.length >= CAP) return null;
+  if (!i.prefs.partner || i.sentToday.includes(kind) || i.sentToday.length >= CAP_NON_STREAK) return null;
   if (m < PARTNER_START || m >= PARTNER_END) return null;
   if (kind === 'duel') {
     return {

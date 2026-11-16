@@ -2,11 +2,10 @@
 //   { mode: 'scheduled' }  + header x-cron-secret   (pg_cron every 15 min)
 //   { mode: 'partner', kind, from, to, duelBothPlayed? } + Authorization: Bearer <user JWT>   (the PWA)
 import webpush from 'npm:web-push@3.6.7';
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { decidePartner, decideScheduled, localClock, prevDay, type DayStat, type Kind, type Prefs, type Push } from '../_shared/decide.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const CRON_SECRET = Deno.env.get('CRON_SECRET') ?? '';
 
@@ -166,11 +165,7 @@ async function runScheduled(): Promise<number> {
 async function runPartner(req: Request, body: Record<string, unknown>): Promise<Response> {
   const authorization = req.headers.get('Authorization');
   if (!authorization) return json(401, { error: 'missing jwt' });
-  const user = createClient(SUPABASE_URL, ANON_KEY, {
-    global: { headers: { Authorization: authorization } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data: auth, error: authErr } = await user.auth.getUser();
+  const { data: auth, error: authErr } = await admin.auth.getUser(authorization.replace(/^Bearer\s+/i, ''));
   if (authErr || !auth?.user) return json(401, { error: 'bad jwt' });
 
   const { kind, from, to, duelBothPlayed } = body;

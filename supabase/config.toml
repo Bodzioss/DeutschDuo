@@ -1,2 +1,4 @@
+project_id = "deutsch-duo"
+
 [functions.notify]
 verify_jwt = false

@@ -62,7 +62,7 @@ Powiadomienia mają przypomnieć o celu, ratować streak i zaprosić do rywaliza
 - `streak`: `prefs.streak`, godzina ≥ 21:30, przed 23:30, cel dziś **niespełniony** i cel **wczoraj spełniony**
   (jest seria do stracenia), nie wysłane dziś. Mrożenia ignorujemy: ostrzeżenie i tak się przydaje. Może przyjść po
   przypomnieniu o celu tego samego dnia: to „ostatnie wezwanie” o innej treści i porze. *(decyzja budowniczego)*
-- limit: każdy rodzaj najwyżej raz dziennie; łącznie najwyżej 3, ale `streak` jest zawsze dozwolony (najważniejszy).
+- limit: każdy rodzaj najwyżej raz dziennie; twardy limit 3 na dzień nauki; `goal`, `duel` i `overtake` tylko gdy dziś wysłano mniej niż 2, a `streak` gdy mniej niż 3 (jedno miejsce zawsze zostaje dla streaka).
   *(decyzja budowniczego)*
 
 Dane wejściowe `decideScheduled` dla streaku: minuty, cel i zamknięcie kolejki za dziś i za wczoraj (jedno zapytanie

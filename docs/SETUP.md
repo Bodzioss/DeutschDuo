@@ -95,11 +95,17 @@ Klucze VAPID i `CRON_SECRET` są w pliku `supabase/.secrets.local` (nie trafia d
      select net.http_post(
        url := 'https://<ref>.supabase.co/functions/v1/notify',
        headers := jsonb_build_object('Content-Type','application/json','x-cron-secret','<CRON_SECRET>'),
-       body := '{"mode":"scheduled"}'::jsonb
+       body := '{"mode":"scheduled"}'::jsonb,
+       timeout_milliseconds := 30000
      )
    $$);
    ```
 5. **Cloudflare Pages:** w zmiennych środowiskowych (Production) dodaj `VITE_VAPID_PUBLIC_KEY=<klucz publiczny>`, a potem zrób ponowny deploy (**Deployments → Retry deployment**), bo zmienne `VITE_` trafiają do aplikacji przy buildzie.
 6. **Na każdym telefonie:** **Ustawienia → Powiadomienia → Włącz powiadomienia** i zezwól na powiadomienia. Na iPhonie działa to tylko w aplikacji otwartej z ekranu głównego.
+7. **Sprawdzenie:** po godzinie przypomnienia, gdy cel dnia jest jeszcze niezrobiony, wywołaj funkcję ręcznie:
+   ```
+   curl -X POST https://<ref>.supabase.co/functions/v1/notify -H "x-cron-secret: <CRON_SECRET>" -H "Content-Type: application/json" -d '{"mode":"scheduled"}'
+   ```
+   Oczekiwana odpowiedź to `{"sent":1}` i powiadomienie na telefonie. Jeśli go nie ma, zajrzyj do **Edge Functions → notify → Logs**, a dla wywołań crona uruchom w SQL Editor: `select * from net._http_response order by id desc limit 5;`.
 
-**Uwaga:** zmiana kluczy VAPID unieważnia wszystkie istniejące subskrypcje. Po zmianie każdy telefon musi ponownie włączyć powiadomienia.
+**Uwaga:** zmiana kluczy VAPID unieważnia wszystkie istniejące subskrypcje. Po zmianie każdy telefon musi dotknąć „Wyłącz na tym telefonie”, a potem „Włącz powiadomienia”.

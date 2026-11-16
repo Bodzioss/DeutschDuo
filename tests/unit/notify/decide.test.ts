@@ -68,10 +68,14 @@ describe('decideScheduled streak', () => {
   it('only streak when goal also due', () => {
     expect(sched({ now: at(21, 40) }).map((p) => p.kind)).toEqual(['streak']);
   });
-  it('exempt from cap, goal is not', () => {
-    const s: Kind[] = ['goal', 'duel', 'overtake'];
-    expect(sched({ now: at(21, 40), sentToday: s }).map((p) => p.kind)).toEqual(['streak']);
+  it('one slot is always left for streak, goal is capped at 2', () => {
+    expect(sched({ now: at(21, 40), sentToday: ['duel', 'overtake'] }).map((p) => p.kind)).toEqual(['streak']);
+    expect(sched({ now: at(19, 10), sentToday: ['duel', 'overtake'] })).toEqual([]);
     expect(sched({ now: at(21, 10), sentToday: ['duel', 'overtake', 'streak'] })).toEqual([]);
+  });
+  it('not when prefs.streak is off or already sent', () => {
+    expect(sched({ now: at(21, 40), today: t3, prefs: { ...prefs, streak: false } }).map((p) => p.kind)).toEqual(['goal']);
+    expect(sched({ now: at(21, 40), today: t3, sentToday: ['streak'] }).map((p) => p.kind)).toEqual(['goal']);
   });
   it('nothing at 02:30', () => {
     expect(sched({ now: new Date('2026-11-17T01:30:00Z') })).toEqual([]);
@@ -96,6 +100,6 @@ describe('decidePartner', () => {
     expect(decidePartner('duel', { ...base, now: at(22, 10) })).toBeNull();
     expect(decidePartner('duel', { ...base, now: at(12, 0), sentToday: ['duel'] })).toBeNull();
     expect(decidePartner('duel', { ...base, now: at(12, 0), prefs: { ...prefs, partner: false } })).toBeNull();
-    expect(decidePartner('duel', { ...base, now: at(12, 0), sentToday: ['goal', 'streak', 'overtake'] })).toBeNull();
+    expect(decidePartner('overtake', { ...base, now: at(12, 0), sentToday: ['goal', 'duel'] })).toBeNull();
   });
 });

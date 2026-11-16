@@ -98,14 +98,19 @@ export async function enablePush(profileId: string): Promise<PushState> {
 
 /** Stops pushes to this device: removes the server row (best effort) and the browser subscription. */
 export async function disablePush(): Promise<void> {
-  const sub = await currentSubscription();
-  if (!sub) return;
   try {
-    await backend.deletePushSubscription(sub.endpoint);
-  } catch {
-    /* offline: the server drops dead endpoints on the next 404/410 */
+    if (!pushAvailable()) return;
+    const sub = await currentSubscription();
+    if (!sub) return;
+    try {
+      await backend.deletePushSubscription(sub.endpoint);
+    } catch {
+      /* offline: the server drops dead endpoints on the next 404/410 */
+    }
+    await sub.unsubscribe();
+  } catch (e) {
+    console.warn('push disable failed', e);
   }
-  await sub.unsubscribe();
 }
 
 /** On app start / profile switch: re-save the existing subscription (moves it to this profile, refreshes tz). Never throws. */

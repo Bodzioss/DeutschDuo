@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useCurrentProfile, useProfileStore } from '@/stores/profileStore';
 import { useSessionStore } from '@/stores/sessionStore';
 import { backend } from '@/data/backend';
+import { disablePush } from '@/data/push';
 import { Button } from '@/ui/Button';
 import { applyTheme, getTheme, type Theme } from './theme';
 import { Row, Segmented } from './controls';
@@ -34,6 +35,7 @@ export function SettingsScreen() {
 
   const signOut = async () => {
     if (!confirm('Wylogować to urządzenie? Postęp zostaje w chmurze i na telefonie.')) return;
+    await disablePush().catch(() => {}); // needs the JWT, so before signOut
     await backend.signOut();
     resetSession();
     navigate('/setup', { replace: true });
