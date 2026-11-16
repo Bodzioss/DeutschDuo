@@ -6,7 +6,7 @@ Verdict: **With fixes**. 0 Critical. The domain, sync and data layers are solid.
 1. ✅ FIXED — **"Na dziś wszystko ✓" hides an unfinished session.** Requeued new cards (due in ~10 min) make `empty` true while `goalMet` is false, so the streak is silently lost. Fix: show Kontynuuj while the in-memory session has items; show the done message only when `goalMet`.
 2. ✅ FIXED — **Stale Heute and session across time and 03:00.** `useToday` recomputes only on DB change; the session store has no day stamp, so "Kontynuuj" can resume yesterday's queue. Fix: refresh on visibility/minute timer; store `builtForDay`; rebuild in ReviewScreen when it differs.
 3. ✅ FIXED — **Double tap → duplicate or accidental ratings.** `answer()` has no in-flight guard; RatingBar appears exactly where Pokaż/Sprawdź was. Fix: busy guard, ignore taps ~300 ms after reveal, `touch-action: manipulation`.
-4. ⏳ TODO — **Changing the daily goal rewrites streak history.** Every past day is judged against the current goal. Fix: snapshot `goal_min` per review/day (migration column).
+4. ✅ FIXED (goal snapshot per review, migration 0002) — **Changing the daily goal rewrites streak history.** Every past day is judged against the current goal. Fix: snapshot `goal_min` per review/day (migration column).
 5. ✅ FIXED (Settings notice still TODO) — **Auto-audio speaks German with a non-German voice.** `speak()` must return early without a German voice. The "one-time notice in Settings" from spec §5.4 is not implemented.
 
 ## Minor (deferred unless noted)
