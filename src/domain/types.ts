@@ -76,6 +76,8 @@ export interface GameRecord {
   durationMs: number;
   playedAt: string;
   localDay: string;
+  /** Set when this game was the pair's duel of that learning day (YYYY-MM-DD). */
+  duelDay?: string;
   synced: 0 | 1;
 }
 
