@@ -8,3 +8,5 @@ test-results
 playwright-report
 .superpowers/
 *.log
+supabase/.secrets.local
+supabase/.temp/

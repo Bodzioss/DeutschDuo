@@ -69,4 +69,37 @@ Nowa aplikacja z brakującą migracją nie potrafi zsynchronizować części dan
 | `0002_review_goal_min.sql` | cel dzienny zapisany przy każdej powtórce |
 | `0003_game_sessions.sql` | wyniki Wortpasjansu |
 | `0004_game_duel_day.sql` | pojedynek dnia |
+| `0005_notifications.sql` | powiadomienia: preferencje profilu, subskrypcje push, dziennik wysłanych |
 
+## 7. Powiadomienia (Etap 4a)
+
+Przypomnienia o celu i serii oraz powiadomienia od partnera wysyła funkcja Supabase `notify`. Co 15 minut uruchamia ją `pg_cron`.
+Klucze VAPID i `CRON_SECRET` są w pliku `supabase/.secrets.local` (nie trafia do repo). Klucza prywatnego nie wpisuj nigdzie poza sekretami Supabase.
+`<ref>` to identyfikator projektu: fragment adresu `https://<ref>.supabase.co`.
+
+1. **Migracja:** w **SQL Editor** uruchom `supabase/migrations/0005_notifications.sql` (patrz tabela w §6).
+2. **Sekrety funkcji:** w terminalu, w katalogu repo (wartości z `supabase/.secrets.local`):
+   ```
+   npx supabase secrets set --project-ref <ref> VAPID_PUBLIC_KEY=<klucz publiczny> VAPID_PRIVATE_KEY=<klucz prywatny> VAPID_SUBJECT=mailto:<twój e-mail> CRON_SECRET=<sekret crona>
+   ```
+   `SUPABASE_URL`, `SUPABASE_ANON_KEY` i `SUPABASE_SERVICE_ROLE_KEY` Supabase dostarcza funkcji sam.
+3. **Wdrożenie funkcji:**
+   ```
+   npx supabase login
+   npx supabase functions deploy notify --project-ref <ref> --no-verify-jwt
+   ```
+   `--no-verify-jwt` jest potrzebne, bo cron nie ma JWT. Funkcja sama sprawdza sekret crona albo JWT pary.
+4. **Harmonogram:** w **Database → Extensions** włącz `pg_cron` i `pg_net`. Potem w **SQL Editor** uruchom (podmień `<ref>` i `<CRON_SECRET>`):
+   ```sql
+   select cron.schedule('notify-every-15-min', '*/15 * * * *', $$
+     select net.http_post(
+       url := 'https://<ref>.supabase.co/functions/v1/notify',
+       headers := jsonb_build_object('Content-Type','application/json','x-cron-secret','<CRON_SECRET>'),
+       body := '{"mode":"scheduled"}'::jsonb
+     )
+   $$);
+   ```
+5. **Cloudflare Pages:** w zmiennych środowiskowych (Production) dodaj `VITE_VAPID_PUBLIC_KEY=<klucz publiczny>`, a potem zrób ponowny deploy (**Deployments → Retry deployment**), bo zmienne `VITE_` trafiają do aplikacji przy buildzie.
+6. **Na każdym telefonie:** **Ustawienia → Powiadomienia → Włącz powiadomienia** i zezwól na powiadomienia. Na iPhonie działa to tylko w aplikacji otwartej z ekranu głównego.
+
+**Uwaga:** zmiana kluczy VAPID unieważnia wszystkie istniejące subskrypcje. Po zmianie każdy telefon musi ponownie włączyć powiadomienia.
