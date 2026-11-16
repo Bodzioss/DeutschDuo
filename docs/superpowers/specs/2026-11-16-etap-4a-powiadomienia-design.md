@@ -69,7 +69,7 @@ Dane wejściowe `decideScheduled` dla streaku: minuty, cel i zamknięcie kolejki
 agregujące `reviews` po `local_day in (dziś, wczoraj)`).
 
 `decidePartner(kind: 'duel' | 'overtake', { prefs, sentToday, partnerName, duelBothPlayed })` → jedno powiadomienie lub nic:
-raz dziennie każdego rodzaju, w limicie 3. Cisza nocna: zdarzenia partnera wysyłamy tylko 8:00–22:00 czasu odbiorcy;
+raz dziennie każdego rodzaju, tylko gdy dziś wysłano mniej niż 2 (jedno miejsce zostaje dla streaku). Cisza nocna: zdarzenia partnera wysyłamy tylko 8:00–22:00 czasu odbiorcy;
 poza tym oknem przepadają (bez kolejki). „Dzień” do deduplikacji to dzień nauki odbiorcy w strefie `tz` jego subskrypcji.
 *(decyzje budowniczego)*
 
