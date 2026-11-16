@@ -1,0 +1,267 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useCurrentProfile } from '@/stores/profileStore';
+import { useSessionStore } from '@/stores/sessionStore';
+import { useProfileData } from '@/data/useProfileData';
+import { openProfileDb } from '@/data/db';
+import { peekWord, recordGame } from '@/data/games';
+import { getWord, getWords } from '@/data/words';
+import { levelById, nextLevel } from '@/domain/wortpasjans/levels';
+import { generateDeal } from '@/domain/wortpasjans/generator';
+import { srsRank } from '@/domain/wortpasjans/pool';
+import { FREE_PEEKS, stars as starsFor } from '@/domain/wortpasjans/scoring';
+import { categoryOf, isCategoryCard, wordIdOf, type CardId, type Deal } from '@/domain/wortpasjans/engine';
+import { expectedAnswer } from '@/domain/answerCheck';
+import type { CardRecord, Profile } from '@/domain/types';
+import { Button } from '@/ui/Button';
+import { GenderWord } from '@/ui/GenderWord';
+import { AudioButton } from '@/ui/AudioButton';
+import { speak } from '@/ui/speech';
+import { CardBack, CategoryCard, WordCard } from './GameCard';
+import { useBoard } from './useBoard';
+
+/** Builds a personalised solvable deal once per attempt (not on every DB change). */
+function useDeal(levelId: string, cards: CardRecord[] | null, attempt: number, fixedSeed: number | null) {
+  const [g, setG] = useState<ReturnType<typeof generateDeal> | null>(null);
+  useEffect(() => {
+    const level = levelById(levelId);
+    if (!level || !cards) return;
+    const words = getWords();
+    // a fixed seed (?seed=…) gives a reproducible board (tests now, duels in Etap 3)
+    const seed = fixedSeed !== null && attempt === 0 ? fixedSeed : (Date.now() + attempt * 7919) % 2_147_483_647;
+    setG(generateDeal(seed, level, { words, rank: srsRank(words, cards, new Date()) }));
+  }, [levelId, attempt, cards === null]); // eslint-disable-line react-hooks/exhaustive-deps
+  return g;
+}
+
+export function BoardScreen() {
+  const { level = '' } = useParams();
+  const profile = useCurrentProfile();
+  const data = useProfileData(profile?.id);
+  const [attempt, setAttempt] = useState(0);
+  const [params] = useSearchParams();
+  const fixedSeed = params.get('seed') !== null && /^\d+$/.test(params.get('seed')!) ? Number(params.get('seed')) : null;
+  const g = useDeal(level, data?.cards ?? null, attempt, fixedSeed);
+  if (!levelById(level)) return <p className="p-6">Nie ma takiej planszy. <Link to="/game" className="text-accent">Mapa</Link></p>;
+  if (!profile || !g) return <p className="p-6 text-center text-muted">Tasuję karty…</p>;
+  return <Board key={`${g.deal.seed}-${attempt}`} profile={profile} deal={g.deal} par={g.par} moveLimit={g.moveLimit} onRetry={() => setAttempt((a) => a + 1)} />;
+}
+
+function Board({ profile, deal, par, moveLimit, onRetry }: { profile: Profile; deal: Deal; par: number; moveLimit: number; onRetry: () => void }) {
+  const b = useBoard(deal, moveLimit);
+  const navigate = useNavigate();
+  const startWords = useSessionStore((s) => s.startWords);
+  const [peekCard, setPeekCard] = useState<string | null>(null);
+  const [result, setResult] = useState<{ stars: number; won: boolean } | null>(null);
+  const saved = useRef(false);
+  const level = levelById(deal.level)!;
+  const db = openProfileDb(profile.id);
+  const catLabel = useMemo(() => new Map(deal.categories.map((c) => [c.id, c])), [deal]);
+  // test builds only: expose the deal so E2E can solve it and replay the moves
+  if (import.meta.env.VITE_BACKEND === 'fake') (window as unknown as { __duoDeal?: Deal }).__duoDeal = deal;
+
+  const finish = async (won: boolean) => {
+    if (saved.current) return;
+    saved.current = true;
+    const st = starsFor({ won, moves: b.state.moves, par, peeks: b.peeked.length });
+    await recordGame(db, { level: deal.level, seed: deal.seed, won, stars: st, moves: b.state.moves, par, peeks: b.peeked.length, peekedWordIds: b.peeked, durationMs: b.durationMs(), now: new Date() });
+    setResult({ stars: st, won });
+  };
+
+  useEffect(() => {
+    if (b.won) void finish(true);
+    else if (b.lost) void finish(false);
+  }, [b.won, b.lost]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const doPeek = (wordId: string) => {
+    if (!b.peeked.includes(wordId)) void peekWord(db, wordId, new Date());
+    b.peek(wordId);
+    setPeekCard(wordId);
+    const w = getWord(wordId);
+    if (w) speak(expectedAnswer(w));
+  };
+
+  const quit = async () => {
+    if (b.state.moves > 0 && !result) {
+      if (!confirm('Zakończyć planszę? Zostanie zapisana jako nieukończona.')) return;
+      await finish(false);
+    }
+    navigate('/game');
+  };
+
+  const isTarget = (t: { kind: 'slot'; slot: number } | { kind: 'column'; col: number }) =>
+    b.targets.some((x) => x.kind === t.kind && (x.kind === 'slot' ? t.kind === 'slot' && x.slot === t.slot : t.kind === 'column' && x.col === t.col));
+
+  const renderCard = (card: CardId, opts: { selected: boolean; target: boolean; onTap: () => void }) => {
+    if (isCategoryCard(card)) {
+      const c = catLabel.get(categoryOf(deal, card))!;
+      return <CategoryCard label={c.label} hint={c.hint} {...opts} />;
+    }
+    const w = getWord(wordIdOf(card)!)!;
+    return <WordCard word={w} {...opts} onLongPress={() => doPeek(w.id)} />;
+  };
+
+  const sel = b.selected;
+  const peeksLeft = Math.max(0, FREE_PEEKS - b.peeked.length);
+  const selectedWordId = (() => {
+    if (!sel) return null;
+    const card = sel.kind === 'waste' ? b.state.waste[b.state.waste.length - 1] : b.state.columns[sel.col].faceUp[b.state.columns[sel.col].faceUp.length - sel.depth];
+    return card ? wordIdOf(card) : null;
+  })();
+
+  return (
+    <div className="mx-auto flex min-h-full max-w-[480px] flex-col gap-3 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))]">
+      <header className="flex items-center justify-between text-sm">
+        <button type="button" onClick={quit} className="py-2 pr-3 text-muted">✕ {level.city} {level.index}/5</button>
+        <span className="tabular-nums" aria-label="Pozostałe ruchy">🦶 {b.movesLeft}</span>
+        <span className="tabular-nums" aria-label="Darmowe podglądy">👁 {peeksLeft}</span>
+      </header>
+
+      {/* category slots */}
+      <div data-testid="slots" className="grid gap-2" style={{ gridTemplateColumns: `repeat(${deal.slots}, minmax(0, 1fr))` }}>
+        {b.state.slots.map((slot, i) => {
+          const target = isTarget({ kind: 'slot', slot: i });
+          if (!slot) {
+            return (
+              <button key={i} data-testid={`slot-${i}`} type="button" onClick={() => b.moveTo({ kind: 'slot', slot: i })} aria-label="Wolne pole kategorii"
+                className={`flex min-h-[3.25rem] items-center justify-center rounded-lg border-2 border-dashed border-muted/30 text-[11px] text-muted ${target ? 'ring-2 ring-das' : ''}`}>
+                wolne pole
+              </button>
+            );
+          }
+          const c = catLabel.get(slot.categoryId)!;
+          return (
+            <div key={i} data-testid={`slot-${i}`}><CategoryCard label={c.label} hint={c.hint} target={target} onTap={() => b.moveTo({ kind: 'slot', slot: i })}>
+              <span className="text-[11px] tabular-nums">{slot.count}/{c.wordIds.length}</span>
+            </CategoryCard></div>
+          );
+        })}
+      </div>
+      <p className="text-center text-[11px] text-muted">Ukończone: {b.state.completed.length}/{deal.categories.length}</p>
+
+      {/* tableau */}
+      <div className="grid flex-1 grid-cols-4 items-start gap-2">
+        {b.state.columns.map((col, ci) => {
+          const target = isTarget({ kind: 'column', col: ci });
+          const empty = !col.faceDown.length && !col.faceUp.length;
+          return (
+            <div key={ci} data-testid={`col-${ci}`} className={`flex min-h-[4rem] flex-col rounded-lg ${target && empty ? 'ring-2 ring-das' : ''}`}
+              onClick={() => empty && b.moveTo({ kind: 'column', col: ci })}>
+              {empty && <div className="flex h-[3.25rem] items-center justify-center rounded-lg border border-dashed border-muted/25 text-[10px] text-muted">pusta</div>}
+              {col.faceDown.map((_, i) => <CardBack key={`d${i}`} />)}
+              {col.faceUp.map((card, i) => {
+                const depth = col.faceUp.length - i;
+                const isTop = i === col.faceUp.length - 1;
+                const selected = !!sel && sel.kind === 'column' && sel.col === ci && depth <= sel.depth;
+                return (
+                  <div key={card} data-testid={`col-${ci}-up-${i}`} className={isTop ? '' : '-mb-7'}>
+                    {renderCard(card, {
+                      selected,
+                      target: isTop && target,
+                      onTap: () => (b.selected && !(sel?.kind === 'column' && sel.col === ci) ? b.moveTo({ kind: 'column', col: ci }) : b.selectInColumn(ci, i)),
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* stock / waste / peek */}
+      <div className="grid grid-cols-4 items-end gap-2">
+        <button type="button" onClick={b.draw} aria-label={`Stos: ${b.state.stock.length} kart`}
+          className="flex h-[3.25rem] items-center justify-center rounded-lg border border-muted/30 bg-gradient-to-br from-accent/40 to-accent/20 text-sm font-semibold">
+          {b.state.stock.length ? `🂠 ${b.state.stock.length}` : '↺'}
+        </button>
+        <div data-testid="waste">
+          {b.state.waste.length ? (
+            renderCard(b.state.waste[b.state.waste.length - 1], {
+              selected: sel?.kind === 'waste',
+              target: false,
+              onTap: () => b.select({ kind: 'waste' }),
+            })
+          ) : (
+            <div className="h-[3.25rem] rounded-lg border border-dashed border-muted/25" />
+          )}
+        </div>
+        <div className="col-span-2">
+          <Button variant="secondary" className="w-full py-3 text-sm" disabled={!selectedWordId} onClick={() => selectedWordId && doPeek(selectedWordId)}>
+            🔄 Podejrzyj
+          </Button>
+        </div>
+      </div>
+
+      {peekCard && <PeekSheet wordId={peekCard} showPl={profile.showPl} onClose={() => setPeekCard(null)} />}
+      {result && (
+        <Summary
+          result={result}
+          moves={b.state.moves}
+          peeked={b.peeked}
+          levelId={deal.level}
+          onPractise={async () => {
+            await startWords(profile, b.peeked);
+            navigate('/review');
+          }}
+          onRetry={onRetry}
+        />
+      )}
+    </div>
+  );
+}
+
+function PeekSheet({ wordId, showPl, onClose }: { wordId: string; showPl: boolean; onClose: () => void }) {
+  const w = getWord(wordId);
+  if (!w) return null;
+  return (
+    <div role="dialog" aria-label="Podgląd słowa" className="fixed inset-0 z-20 flex items-end bg-black/40" onClick={onClose}>
+      <div className="mx-auto w-full max-w-[480px] space-y-2 rounded-t-2xl bg-surface p-5 text-center" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-center gap-2">
+          <GenderWord word={w} showPlural className="text-2xl" />
+          <AudioButton text={expectedAnswer(w)} small />
+        </div>
+        <p className="text-lg">{w.en}</p>
+        {showPl && w.pl && <p className="text-muted">{w.pl}</p>}
+        <p className="text-xs text-muted">To słowo wróci szybciej w fiszkach.</p>
+        <Button className="w-full" onClick={onClose}>OK</Button>
+      </div>
+    </div>
+  );
+}
+
+function Summary({ result, moves, peeked, levelId, onPractise, onRetry }: { result: { stars: number; won: boolean }; moves: number; peeked: string[]; levelId: string; onPractise: () => void; onRetry: () => void }) {
+  const navigate = useNavigate();
+  const next = nextLevel(levelId);
+  return (
+    <div role="dialog" aria-label="Podsumowanie planszy" className="fixed inset-0 z-30 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-[420px] space-y-4 rounded-2xl bg-surface p-5 text-center">
+        <h2 className="text-2xl font-bold">{result.won ? 'Geschafft!' : 'Nicht ganz…'}</h2>
+        <p className="text-3xl" aria-label={`${result.stars} gwiazdki`}>{'⭐'.repeat(result.stars)}{'☆'.repeat(3 - result.stars)}</p>
+        <p className="text-sm text-muted">Ruchy: {moves} · podglądy: {peeked.length}</p>
+        {peeked.length > 0 && (
+          <ul className="divide-y divide-muted/10 rounded-xl bg-bg text-left text-sm">
+            {peeked.map((id) => {
+              const w = getWord(id);
+              return w ? (
+                <li key={id} className="flex justify-between gap-2 px-3 py-2">
+                  <GenderWord word={w} />
+                  <span className="truncate text-muted">{w.en}</span>
+                </li>
+              ) : null;
+            })}
+          </ul>
+        )}
+        <div className="space-y-2">
+          {peeked.length > 0 && <Button className="w-full" onClick={onPractise}>Ćwicz teraz ({peeked.length})</Button>}
+          {result.won && next && (
+            <Button variant={peeked.length ? 'secondary' : 'primary'} className="w-full" onClick={() => navigate(`/game/${next.id}`)}>
+              Następna plansza: {next.city} {next.index}/5
+            </Button>
+          )}
+          <Button variant="secondary" className="w-full" onClick={onRetry}>Jeszcze raz</Button>
+          <Button variant="ghost" className="w-full" onClick={() => navigate('/game')}>Mapa</Button>
+        </div>
+      </div>
+    </div>
+  );
+}

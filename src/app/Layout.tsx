@@ -3,6 +3,7 @@ import { useCurrentProfile } from '@/stores/profileStore';
 
 const tabs = [
   { to: '/', label: 'Heute', icon: '☀️', end: true },
+  { to: '/game', label: 'Gra', icon: '🃏', end: false },
   { to: '/words', label: 'Słowa', icon: '📖', end: false },
   { to: '/stats', label: 'Statystyki', icon: '📈', end: false },
   { to: '/settings', label: 'Ustawienia', icon: '⚙️', end: false },

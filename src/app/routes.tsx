@@ -10,6 +10,8 @@ import { WordDetailScreen } from '@/features/words/WordDetailScreen';
 import { StatsScreen } from '@/features/stats/StatsScreen';
 import { SettingsScreen } from '@/features/settings/SettingsScreen';
 import { AboutDataScreen } from '@/features/settings/AboutDataScreen';
+import { MapScreen } from '@/features/game/MapScreen';
+import { BoardScreen } from '@/features/game/BoardScreen';
 
 export const router = createBrowserRouter([
   { path: '/setup', element: <PairPasswordScreen /> },
@@ -21,10 +23,12 @@ export const router = createBrowserRouter([
         element: <ProfileGate />,
         children: [
           { path: '/review', element: <ReviewScreen /> },
+          { path: '/game/:level', element: <BoardScreen /> },
           {
             element: <Layout />,
             children: [
               { path: '/', element: <TodayScreen /> },
+              { path: '/game', element: <MapScreen /> },
               { path: '/words', element: <WordsScreen /> },
               { path: '/words/:id', element: <WordDetailScreen /> },
               { path: '/stats', element: <StatsScreen /> },

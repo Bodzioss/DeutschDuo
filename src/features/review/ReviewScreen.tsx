@@ -19,7 +19,9 @@ export function ReviewScreen() {
 
   useEffect(() => {
     // Resume only a same-day, same-profile, unfinished session; otherwise build today's queue.
-    if (profile && !isResumable(useSessionStore.getState(), profile.id, new Date())) void start(profile);
+    const s = useSessionStore.getState();
+    const practiceOpen = s.kind === 'practice' && s.profileId === profile?.id && !s.done;
+    if (profile && !practiceOpen && !isResumable(s, profile.id, new Date())) void start(profile);
   }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // "Dobrze · 10 min": what each rating button will schedule for the current card

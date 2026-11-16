@@ -4,11 +4,17 @@ import { isResumable, useSessionStore } from '@/stores/sessionStore';
 import { Button } from '@/ui/Button';
 import { ProgressBar } from '@/ui/ProgressBar';
 import { useToday } from './useToday';
+import { useProfileGames } from '@/features/game/useProfileGames';
+import { bestStarsByLevel, nextBoard } from '@/domain/wortpasjans/scoring';
+import { levelById } from '@/domain/wortpasjans/levels';
+import { Link } from 'react-router-dom';
 
 export function TodayScreen() {
   const profile = useCurrentProfile();
   const t = useToday(profile);
   const navigate = useNavigate();
+  const games = useProfileGames(profile?.id);
+  const nextGame = levelById(nextBoard(bestStarsByLevel(games ?? [])))!;
   const inProgress = useSessionStore((s) => !!profile && s.index > 0 && isResumable(s, profile.id, new Date()));
 
   if (!profile || !t) return null;
@@ -66,6 +72,13 @@ export function TodayScreen() {
           {inProgress ? 'Kontynuuj' : 'Start'}
         </Button>
       )}
+      <Link to={`/game/${nextGame.id}`} className="flex items-center justify-between rounded-2xl bg-surface p-4 ring-1 ring-muted/10">
+        <span>
+          <span className="block font-semibold">🃏 Plansza dnia</span>
+          <span className="text-sm text-muted">Wortpasjans · {nextGame.city} {nextGame.index}/5</span>
+        </span>
+        <span aria-hidden className="text-muted">›</span>
+      </Link>
     </div>
   );
 }
