@@ -8,12 +8,16 @@ import { useProfileGames } from '@/features/game/useProfileGames';
 import { bestStarsByLevel, nextBoard } from '@/domain/wortpasjans/scoring';
 import { levelById } from '@/domain/wortpasjans/levels';
 import { Link } from 'react-router-dom';
+import { usePairData } from '@/features/pair/usePairData';
+import { duelGameOf, duelWinner, standings } from '@/domain/pair';
+import { localDay } from '@/domain/day';
 
 export function TodayScreen() {
   const profile = useCurrentProfile();
   const t = useToday(profile);
   const navigate = useNavigate();
   const games = useProfileGames(profile?.id);
+  const players = usePairData();
   const nextGame = levelById(nextBoard(bestStarsByLevel(games ?? [])))!;
   const inProgress = useSessionStore((s) => !!profile && s.index > 0 && isResumable(s, profile.id, new Date()));
 
@@ -72,6 +76,26 @@ export function TodayScreen() {
           {inProgress ? 'Kontynuuj' : 'Start'}
         </Button>
       )}
+      {players && players.length > 1 && (() => {
+        const today = localDay(new Date());
+        const table = standings(players, today);
+        const mine = players.find((p) => p.profileId === profile.id)!;
+        const partner = players.find((p) => p.profileId !== profile.id)!;
+        const myDuel = duelGameOf(mine.games, today);
+        const w = duelWinner(myDuel, duelGameOf(partner.games, today));
+        const duelText = !myDuel ? '⚔️ pojedynek czeka' : w === null ? `⚔️ czekamy na: ${partner.name}` : w === 'draw' ? '⚔️ remis' : `⚔️ wygrywa ${w === 'a' ? profile.displayName : partner.name}`;
+        return (
+          <Link to="/para" data-testid="league-card" className="block rounded-2xl bg-surface p-4 ring-1 ring-muted/10">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold">🏆 Liga tygodnia</span>
+              <span aria-hidden className="text-muted">›</span>
+            </div>
+            <p className="mt-1 text-sm text-muted">
+              {table.map((r) => `${r.name} ${Math.round(r.goalPct * 100)}%`).join(' · ')} · {duelText}
+            </p>
+          </Link>
+        );
+      })()}
       <Link to={`/game/${nextGame.id}`} className="flex items-center justify-between rounded-2xl bg-surface p-4 ring-1 ring-muted/10">
         <span>
           <span className="block font-semibold">🃏 Plansza dnia</span>

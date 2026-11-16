@@ -21,6 +21,7 @@ export function MapScreen() {
         <h1 className="text-2xl font-bold">Wortpasjans</h1>
         <p className="text-sm text-muted">Ułóż słowa w kategorie. Przytrzymaj kartę, żeby podejrzeć tłumaczenie. ⭐ {totalStars}/{LEVELS.length * 3}</p>
       </header>
+      <Link to="/para" className="block rounded-2xl bg-surface px-4 py-3 text-center font-semibold ring-1 ring-accent/40">⚔️ Pojedynek dnia</Link>
       <Link to={`/game/${next}`} className="block rounded-2xl bg-accent px-4 py-4 text-center text-lg font-semibold text-white shadow">
         Graj: {LEVELS.find((l) => l.id === next)!.city} {LEVELS.find((l) => l.id === next)!.index}/5
       </Link>

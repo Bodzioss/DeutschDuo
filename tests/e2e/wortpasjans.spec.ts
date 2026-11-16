@@ -6,7 +6,7 @@ import { applyMove, initialState, type Deal, type GameState, type Move } from '.
 async function tapSource(page: Page, s: GameState, m: Extract<Move, { type: 'move' }>) {
   if (m.from.kind === 'waste') return page.locator('[data-testid=waste] button').click();
   const index = s.columns[m.from.col].faceUp.length - m.from.depth;
-  await page.locator(`[data-testid=col-${m.from.col}-up-${index}] button`).click();
+  await page.locator(`[data-testid=col-${m.from.col}-up-${index}] button`).click({ position: { x: 20, y: 8 } });
 }
 
 async function tapTarget(page: Page, s: GameState, m: Extract<Move, { type: 'move' }>) {
