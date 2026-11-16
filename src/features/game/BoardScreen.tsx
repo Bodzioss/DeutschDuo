@@ -21,7 +21,7 @@ import { GenderWord } from '@/ui/GenderWord';
 import { AudioButton } from '@/ui/AudioButton';
 import { speak } from '@/ui/speech';
 import { chime, haptic } from '@/ui/haptics';
-import { CardBack, CategoryCard, WordCard } from './GameCard';
+import { CardBack, CARD_H, CategoryCard, Deck, EmptySlot, SlotCategory, STACK_OVERLAP, WordCard } from './GameCard';
 import { useBoard } from './useBoard';
 import { useCardDrag } from './useCardDrag';
 
@@ -177,19 +177,25 @@ function Board({ profile, deal, par, moveLimit, duelDay, duelPractice, onRetry }
   const peeksLeft = Math.max(0, FREE_PEEKS - b.peeked.length);
   return (
     <div className="mx-auto flex min-h-full max-w-[480px] flex-col gap-3 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))]">
-      <header className="flex items-center justify-between text-sm">
-        <button type="button" onClick={quit} className="py-2 pr-3 text-muted">
-          ✕ {duelDay ? '⚔️ Pojedynek' : duelPractice ? 'Trening (pojedynek już rozpoczęty)' : `${level.city} ${level.index}/5`}
+      <header className="flex items-center gap-2">
+        <button type="button" onClick={quit} className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left">
+          <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-surface text-muted shadow-card ring-1 ring-muted/15">✕</span>
+          <span className="truncate text-sm font-semibold">{duelDay ? '⚔️ Pojedynek' : duelPractice ? 'Trening (pojedynek już rozpoczęty)' : `${level.city} ${level.index}/5`}</span>
         </button>
-        <span className="tabular-nums" aria-label="Pozostałe ruchy">🦶 {b.movesLeft}</span>
-        <span className="tabular-nums" aria-label="Darmowe podglądy">👁 {peeksLeft}</span>
+        <span className={`shrink-0 rounded-full bg-surface px-2.5 py-1 text-sm font-semibold tabular-nums shadow-card ring-1 ring-muted/15 ${b.movesLeft <= 5 ? 'text-die' : ''}`} aria-label="Pozostałe ruchy">🦶 {b.movesLeft}</span>
+        <span className="shrink-0 rounded-full bg-surface px-2.5 py-1 text-sm font-semibold tabular-nums shadow-card ring-1 ring-muted/15" aria-label="Darmowe podglądy">👁 {peeksLeft}</span>
       </header>
 
       {/* progress on the left; discard pile and deck at the top right */}
       <div className="grid grid-cols-4 items-center gap-2">
-        <div className="col-span-2 space-y-0.5 text-[11px] text-muted">
-          <p>Ukończone: <span className="tabular-nums">{b.state.completed.length}/{deal.categories.length}</span></p>
-          <p>Dotknij słowa 2× — podgląd</p>
+        <div className="col-span-2 space-y-1.5 pr-1">
+          <div className="flex gap-1" aria-label={`Ukończone kategorie: ${b.state.completed.length} z ${deal.categories.length}`}>
+            {deal.categories.map((c, i) => (
+              <span key={c.id} className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${i < b.state.completed.length ? 'bg-das' : 'bg-muted/20'}`} />
+            ))}
+          </div>
+          <p className="text-[11px] text-muted">Ukończone: <span className="tabular-nums">{b.state.completed.length}/{deal.categories.length}</span></p>
+          <p className="text-[11px] text-muted">Dotknij słowa 2× — podgląd</p>
         </div>
         <div data-testid="waste" className={`touch-none ${dnd.drag?.source.kind === 'waste' ? 'opacity-30' : ''}`}
           onPointerDown={(e) => b.state.waste.length && dnd.press(e, { kind: 'waste' }, [b.state.waste[b.state.waste.length - 1]])}>
@@ -200,31 +206,21 @@ function Board({ profile, deal, par, moveLimit, duelDay, duelPractice, onRetry }
               stacked: false,
             })
           ) : (
-            <div className="h-[3.25rem] rounded-lg border border-dashed border-muted/25" />
+            <div className={`${CARD_H} rounded-xl border-2 border-dashed border-muted/20`} />
           )}
         </div>
-        <button type="button" onClick={b.draw} aria-label={`Stos: ${b.state.stock.length} kart`}
-          className="relative flex min-h-[3.25rem] items-center justify-center rounded-lg border border-muted/30 bg-gradient-to-br from-accent/50 to-accent/25 text-sm font-semibold shadow-sm">
-          {b.state.stock.length ? <span className="tabular-nums">{b.state.stock.length}</span> : <span aria-hidden>↺</span>}
-        </button>
+        <Deck count={b.state.stock.length} onTap={b.draw} />
       </div>
 
       {/* category slots */}
       <div data-testid="slots" className="grid gap-2" style={{ gridTemplateColumns: `repeat(${deal.slots}, minmax(0, 1fr))` }}>
         {b.state.slots.map((slot, i) => {
-          if (!slot) {
-            return (
-              <button key={i} data-testid={`slot-${i}`} data-drop={`slot:${i}`} type="button" onClick={() => b.moveTo({ kind: 'slot', slot: i })} aria-label="Wolne pole kategorii"
-                className={`flex min-h-[3.25rem] items-center justify-center rounded-lg border-2 border-dashed border-muted/30 text-[11px] text-muted`}>
-                wolne pole
-              </button>
-            );
-          }
+          if (!slot) return <EmptySlot key={i} index={i} onTap={() => b.moveTo({ kind: 'slot', slot: i })} />;
           const c = catLabel.get(slot.categoryId)!;
           return (
-            <div key={i} data-testid={`slot-${i}`} data-drop={`slot:${i}`}><CategoryCard label={c.label} hint={c.hint} onTap={() => b.moveTo({ kind: 'slot', slot: i })}>
-              <span className="text-[11px] tabular-nums">{slot.count}/{c.wordIds.length}</span>
-            </CategoryCard></div>
+            <div key={i} data-testid={`slot-${i}`} data-drop={`slot:${i}`}>
+              <SlotCategory label={c.label} hint={c.hint} count={slot.count} size={c.wordIds.length} onTap={() => b.moveTo({ kind: 'slot', slot: i })} />
+            </div>
           );
         })}
       </div>
@@ -236,7 +232,7 @@ function Board({ profile, deal, par, moveLimit, duelDay, duelPractice, onRetry }
           return (
             <div key={ci} data-testid={`col-${ci}`} data-drop={`col:${ci}`} className="flex min-h-[4rem] flex-col rounded-lg"
               onClick={() => empty && b.moveTo({ kind: 'column', col: ci })}>
-              {empty && <div className="flex h-[3.25rem] items-center justify-center rounded-lg border border-dashed border-muted/25 text-[10px] text-muted">pusta</div>}
+              {empty && <div className={`${CARD_H} rounded-xl border-2 border-dashed border-muted/20`} />}
               {col.faceDown.map((_, i) => <CardBack key={`d${i}`} />)}
               {col.faceUp.map((card, i) => {
                 const depth = col.faceUp.length - i;
@@ -244,7 +240,7 @@ function Board({ profile, deal, par, moveLimit, duelDay, duelPractice, onRetry }
                 const selected = !!sel && sel.kind === 'column' && sel.col === ci && depth <= sel.depth;
                 const dragged = dnd.drag?.source.kind === 'column' && dnd.drag.source.col === ci && depth <= dnd.drag.source.depth;
                 return (
-                  <div key={card} data-testid={`col-${ci}-up-${i}`} className={`touch-none ${isTop ? '' : '-mb-7'} ${dragged ? 'opacity-30' : ''}`}
+                  <div key={card} data-testid={`col-${ci}-up-${i}`} className={`touch-none ${isTop ? '' : STACK_OVERLAP} ${dragged ? 'opacity-30' : ''}`}
                     onPointerDown={(e) => dnd.press(e, b.sourceAt(ci, i), col.faceUp.slice(i))}>
                     {renderCard(card, {
                       selected,
@@ -271,9 +267,9 @@ function Board({ profile, deal, par, moveLimit, duelDay, duelPractice, onRetry }
       )}
 
       {dnd.drag && (
-        <div aria-hidden className="pointer-events-none fixed z-40 drop-shadow-xl" style={{ left: dnd.drag.x - dnd.drag.dx, top: dnd.drag.y - dnd.drag.dy, width: dnd.drag.width }}>
+        <div aria-hidden className="pointer-events-none fixed z-40 rotate-2 drop-shadow-xl" style={{ left: dnd.drag.x - dnd.drag.dx, top: dnd.drag.y - dnd.drag.dy, width: dnd.drag.width }}>
           {dnd.drag.cards.map((card, i) => (
-            <div key={card} className={i < dnd.drag!.cards.length - 1 ? '-mb-7' : ''}>
+            <div key={card} className={i < dnd.drag!.cards.length - 1 ? STACK_OVERLAP : ''}>
               {renderCard(card, { selected: false, stacked: i < dnd.drag!.cards.length - 1, onTap: () => {} })}
             </div>
           ))}

@@ -33,3 +33,11 @@ body {
 }
 
 button, a, input { touch-action: manipulation; }
+
+/* back of a Wortpasjans card: the app accent with a fine woven pattern */
+.card-back {
+  background-color: rgb(var(--accent));
+  background-image:
+    repeating-linear-gradient(45deg, rgb(255 255 255 / 0.13) 0 3px, transparent 3px 9px),
+    repeating-linear-gradient(-45deg, rgb(255 255 255 / 0.09) 0 3px, transparent 3px 9px);
+}

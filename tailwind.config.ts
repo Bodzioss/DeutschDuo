@@ -15,6 +15,10 @@ export default {
         muted: 'rgb(var(--muted) / <alpha-value>)',
         accent: 'rgb(var(--accent) / <alpha-value>)',
       },
+      boxShadow: {
+        card: '0 1px 2px rgb(0 0 0 / 0.06), 0 2px 6px rgb(0 0 0 / 0.07)',
+        lift: '0 10px 22px rgb(0 0 0 / 0.18)',
+      },
       keyframes: {
         pop: {
           '0%': { opacity: '0', transform: 'translate(-50%, 0) scale(0.6)' },
