@@ -1,10 +1,12 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCurrentProfile, useProfileStore } from '@/stores/profileStore';
 import { useSessionStore } from '@/stores/sessionStore';
 import { backend } from '@/data/backend';
 import { Button } from '@/ui/Button';
 import { applyTheme, getTheme, type Theme } from './theme';
+import { Row, Segmented } from './controls';
+import { NotificationsSection } from './NotificationsSection';
 
 const GOALS = [10, 15, 20, 30];
 const THEMES: { t: Theme; label: string }[] = [
@@ -12,32 +14,6 @@ const THEMES: { t: Theme; label: string }[] = [
   { t: 'light', label: 'Jasny' },
   { t: 'dark', label: 'Ciemny' },
 ];
-
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="space-y-2 px-4 py-3">
-      <p className="text-sm font-medium">{label}</p>
-      {children}
-    </div>
-  );
-}
-
-function Segmented<T extends string | number>({ value, options, onChange }: { value: T; options: { v: T; label: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div className="flex rounded-xl bg-muted/10 p-1">
-      {options.map((o) => (
-        <button
-          key={String(o.v)}
-          type="button"
-          onClick={() => onChange(o.v)}
-          className={`flex-1 rounded-lg py-2 text-sm ${o.v === value ? 'bg-surface font-semibold shadow-sm' : 'text-muted'}`}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 export function SettingsScreen() {
   const profile = useCurrentProfile();
@@ -89,6 +65,7 @@ export function SettingsScreen() {
           <Segmented value={theme} options={THEMES.map(({ t, label }) => ({ v: t, label }))} onChange={(t) => { setTheme(t); applyTheme(t); }} />
         </Row>
       </section>
+      <NotificationsSection profile={profile} />
       <section className="space-y-2">
         <Button variant="secondary" className="w-full" onClick={() => navigate('/who')}>Zmień profil</Button>
         <Link to="/settings/about-data" className="block rounded-xl px-4 py-3 text-center text-accent">O danych i licencjach</Link>

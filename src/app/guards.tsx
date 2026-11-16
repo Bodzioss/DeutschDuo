@@ -3,6 +3,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { backend, backendConfigError } from '@/data/backend';
 import { useProfileStore } from '@/stores/profileStore';
 import { SIGNED_OUT_EVENT, useSync } from '@/data/useSync';
+import { refreshPushSubscription } from '@/data/push';
 
 /**
  * Layout route: the device must be signed into the pair account. Mounted once for all guarded routes.
@@ -50,6 +51,10 @@ export function ProfileGate() {
   const partnerIds = useProfileStore((s) => s.profiles.filter((p) => p.id !== s.currentId).map((p) => p.id).join(','));
   const location = useLocation();
   useSync(currentId, partnerIds ? partnerIds.split(',') : []);
+  // Push goes to whoever is picked on this phone: move the subscription along with the profile.
+  useEffect(() => {
+    if (currentId) void refreshPushSubscription(currentId);
+  }, [currentId]);
   if (!currentId) return <Navigate to="/who" replace state={{ from: location.pathname }} />;
   return <Outlet />;
 }

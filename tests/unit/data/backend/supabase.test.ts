@@ -42,3 +42,20 @@ describe('pull cursor', () => {
     expect(parseCursor('17')).toEqual({ seq: 17, changedAfter: null });
   });
 });
+
+describe('profileUpdateRow', () => {
+  const p = { id: 'p1', displayName: 'Nikola', dailyGoalMin: 15, newPerDay: 10, showPl: true };
+  test('profile cached before notifications (no notify) does not touch notify_* columns', async () => {
+    const { profileUpdateRow } = await import('@/data/backend/supabase');
+    const row = profileUpdateRow(p);
+    expect(row).toEqual({ display_name: 'Nikola', daily_goal_min: 15, new_per_day: 10, show_pl: true });
+    expect(Object.keys(row).some((k) => k.startsWith('notify_'))).toBe(false);
+  });
+  test('profile with notify writes all notify_* columns', async () => {
+    const { profileUpdateRow } = await import('@/data/backend/supabase');
+    expect(profileUpdateRow({ ...p, notify: { goal: false, goalHour: 21, streak: true, partner: false } })).toEqual({
+      display_name: 'Nikola', daily_goal_min: 15, new_per_day: 10, show_pl: true,
+      notify_goal: false, notify_goal_hour: 21, notify_streak: true, notify_partner: false,
+    });
+  });
+});

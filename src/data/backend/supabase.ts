@@ -1,5 +1,5 @@
 import { createClient, isAuthRetryableFetchError, type SupabaseClient } from '@supabase/supabase-js';
-import { notifyPrefs, type CardRecord, type Direction, type FsrsState, type GameRecord, type Grade, type Profile, type ReviewRecord } from '@/domain/types';
+import { type CardRecord, type Direction, type FsrsState, type GameRecord, type Grade, type Profile, type ReviewRecord } from '@/domain/types';
 import { BackendError, type Backend, type Cursor } from './types';
 
 const PAGE = 1000;
@@ -46,6 +46,19 @@ const toProfile = (r: ProfileRow): Profile => ({
   id: r.id, displayName: r.display_name, dailyGoalMin: r.daily_goal_min, newPerDay: r.new_per_day, showPl: r.show_pl,
   notify: { goal: r.notify_goal, goalHour: r.notify_goal_hour, streak: r.notify_streak, partner: r.notify_partner },
 });
+/**
+ * Columns written by updateProfile. notify_* only when the profile carries prefs: a profile cached before
+ * Etap 4a (no `notify`) saved for another reason must not reset the server's prefs to defaults.
+ */
+export function profileUpdateRow(p: Profile): Record<string, string | number | boolean> {
+  const row: Record<string, string | number | boolean> = {
+    display_name: p.displayName, daily_goal_min: p.dailyGoalMin, new_per_day: p.newPerDay, show_pl: p.showPl,
+  };
+  if (p.notify) {
+    Object.assign(row, { notify_goal: p.notify.goal, notify_goal_hour: p.notify.goalHour, notify_streak: p.notify.streak, notify_partner: p.notify.partner });
+  }
+  return row;
+}
 const toCard = (r: CardRow): CardRecord => ({
   id: r.card_id, wordId: r.word_id, direction: r.direction, fsrs: r.fsrs, updatedAt: new Date(r.updated_at).toISOString(), dirty: 0,
 });
@@ -153,14 +166,7 @@ export function createSupabaseBackend(url: string, anonKey: string, pairEmail: s
       return (data as ProfileRow[]).map(toProfile);
     },
     async updateProfile(p) {
-      const n = notifyPrefs(p);
-      const { error } = await sb
-        .from('profiles')
-        .update({
-          display_name: p.displayName, daily_goal_min: p.dailyGoalMin, new_per_day: p.newPerDay, show_pl: p.showPl,
-          notify_goal: n.goal, notify_goal_hour: n.goalHour, notify_streak: n.streak, notify_partner: n.partner,
-        })
-        .eq('id', p.id);
+      const { error } = await sb.from('profiles').update(profileUpdateRow(p)).eq('id', p.id);
       if (error) fail(error);
     },
     async savePushSubscription(profileId, sub) {
