@@ -37,9 +37,30 @@ describe('checkOvertake', () => {
     await checkOvertake(me, [pa], TODAY);
     expect(spy).toHaveBeenCalledTimes(1);
   });
-  test('swallows backend errors', async () => {
-    vi.spyOn(backend, 'notifyPartner').mockRejectedValue(new Error('x'));
+  test('a tie followed by me leading notifies; the first run on a tie only records', async () => {
+    const spy = vi.spyOn(backend, 'notifyPartner');
+    await checkOvertake(me, [pa], TODAY); // tie, first run
+    expect(spy).not.toHaveBeenCalled();
+    await openProfileDb(me).reviews.add(rev(20));
+    await checkOvertake(me, [pa], TODAY);
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+  test('swallows backend errors when it would notify', async () => {
+    const spy = vi.spyOn(backend, 'notifyPartner').mockRejectedValue(new Error('x'));
+    await openProfileDb(pa).reviews.add(rev(10));
+    await checkOvertake(me, [pa], TODAY);
+    await openProfileDb(me).reviews.add(rev(20));
     await expect(checkOvertake(me, [pa], TODAY)).resolves.toBeUndefined();
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+  test('offline: no call', async () => {
+    const spy = vi.spyOn(backend, 'notifyPartner');
+    await openProfileDb(pa).reviews.add(rev(10));
+    await checkOvertake(me, [pa], TODAY);
+    await openProfileDb(me).reviews.add(rev(20));
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    await checkOvertake(me, [pa], TODAY);
+    expect(spy).not.toHaveBeenCalled();
   });
 });
 
@@ -52,5 +73,15 @@ describe('reportDuel', () => {
     await play(pa);
     await reportDuel(me, pa, TODAY);
     expect(spy).toHaveBeenLastCalledWith({ kind: 'duel', from: me, to: pa, duelBothPlayed: true });
+  });
+  test('swallows backend errors', async () => {
+    vi.spyOn(backend, 'notifyPartner').mockRejectedValue(new Error('x'));
+    await expect(reportDuel(me, pa, TODAY)).resolves.toBeUndefined();
+  });
+  test('offline: no call', async () => {
+    const spy = vi.spyOn(backend, 'notifyPartner');
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    await reportDuel(me, pa, TODAY);
+    expect(spy).not.toHaveBeenCalled();
   });
 });

@@ -25,9 +25,9 @@ export async function checkOvertake(me: string, partners: string[], today: strin
     const profiles = useProfileStore.getState().profiles.filter((p) => ids.includes(p.id));
     const s = standings(await loadPlayers(profiles), today);
     const db = openProfileDb(me);
-    const prev = (await getMeta<string | null>(db, LEADER_KEY)) ?? null;
+    const raw = await getMeta<string | null>(db, LEADER_KEY); // undefined = first run, null = tie
     await setMeta(db, LEADER_KEY, soleLeader(s));
-    if (prev !== null && overtook(prev, s, me)) {
+    if (raw !== undefined && overtook(raw, s, me)) {
       for (const to of partners) await backend.notifyPartner({ kind: 'overtake', from: me, to });
     }
   } catch (e) {
