@@ -80,7 +80,7 @@ Klucze VAPID i `CRON_SECRET` są w pliku `supabase/.secrets.local` (nie trafia d
 1. **Migracja:** w **SQL Editor** uruchom `supabase/migrations/0005_notifications.sql` (patrz tabela w §6).
 2. **Sekrety funkcji:** w terminalu, w katalogu repo (wartości z `supabase/.secrets.local`):
    ```
-   npx supabase secrets set --project-ref <ref> VAPID_PUBLIC_KEY=<klucz publiczny> VAPID_PRIVATE_KEY=<klucz prywatny> VAPID_SUBJECT=mailto:<twój e-mail> CRON_SECRET=<sekret crona>
+   npx supabase secrets set --project-ref <ref> VAPID_PUBLIC_KEY=<klucz publiczny> VAPID_PRIVATE_KEY=<klucz prywatny> VAPID_SUBJECT=https://deutschduo.pages.dev CRON_SECRET=<sekret crona>
    ```
    `SUPABASE_URL`, `SUPABASE_ANON_KEY` i `SUPABASE_SERVICE_ROLE_KEY` Supabase dostarcza funkcji sam.
 3. **Wdrożenie funkcji:**
