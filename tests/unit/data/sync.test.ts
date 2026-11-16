@@ -151,3 +151,17 @@ describe('partner data', () => {
     expect((await partnerOnMyPhone.games.toArray())[0].duelDay).toBe('2026-11-16');
   });
 });
+
+describe('partner sync is light', () => {
+  test('pullCards: false skips the card table', async () => {
+    const partnerId = (await cloud.fetchProfiles())[1].id;
+    const phone = device();
+    await recordReview(phone, { item: item('a'), grade: 3, durationMs: 1000, now: t0, closesQueue: false });
+    await syncProfile(phone, partnerId, cloud);
+    const mine = device();
+    const r = await syncProfile(mine, partnerId, cloud, { pullCards: false });
+    expect(r.pulledCards).toBe(0);
+    expect(r.pulledReviews).toBe(1);
+    expect(await mine.cards.count()).toBe(0);
+  });
+});

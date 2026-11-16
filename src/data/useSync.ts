@@ -14,22 +14,26 @@ export const SIGNED_OUT_EVENT = 'duo:signed-out';
  * One sync at a time per profile. A trigger that arrives while that profile is syncing schedules exactly one
  * more run afterwards (so reviews made during a sync are not left waiting for the next timer).
  */
-export function createSyncScheduler(run: (profileId: string) => Promise<void>) {
-  const inFlight = new Map<string, Promise<void>>();
+export type SyncStatus = 'ok' | 'error' | 'signed_out';
+
+export function createSyncScheduler<R = void>(run: (profileId: string) => Promise<R>) {
+  const inFlight = new Map<string, Promise<R>>();
   const again = new Set<string>();
 
-  const start = (id: string): Promise<void> => {
+  const start = (id: string): Promise<R> => {
     const p = (async () => {
+      let r: R;
       do {
         again.delete(id);
-        await run(id);
+        r = await run(id);
       } while (again.has(id));
+      return r;
     })().finally(() => inFlight.delete(id));
     inFlight.set(id, p);
     return p;
   };
 
-  return (id: string): Promise<void> => {
+  return (id: string): Promise<R> => {
     const cur = inFlight.get(id);
     if (cur) {
       again.add(id);
@@ -50,14 +54,28 @@ export async function handleSyncError(e: unknown, b: Pick<Backend, 'recoverSessi
   return 'signed_out';
 }
 
-export const syncNow = createSyncScheduler(async (profileId) => {
+let currentProfileId: string | null = null;
+
+/** Sync one profile. Partner profiles (not the one in use on this device) skip their card table. */
+export const syncNow = createSyncScheduler<SyncStatus>(async (profileId) => {
   try {
-    await syncProfile(openProfileDb(profileId), profileId, backend);
+    await syncProfile(openProfileDb(profileId), profileId, backend, { pullCards: profileId === currentProfileId });
+    return 'ok';
   } catch (e) {
     console.warn('sync skipped', e);
-    if ((await handleSyncError(e, backend)) === 'signed_out') window.dispatchEvent(new Event(SIGNED_OUT_EVENT));
+    if ((await handleSyncError(e, backend)) === 'signed_out') {
+      window.dispatchEvent(new Event(SIGNED_OUT_EVENT));
+      return 'signed_out';
+    }
+    return 'error';
   }
 });
+
+/** Own profile first; partners only if this device is still signed in. */
+export async function syncWithPartners(me: string, partners: string[], run: (id: string) => Promise<SyncStatus> = syncNow): Promise<void> {
+  if ((await run(me)) === 'signed_out') return;
+  for (const id of partners) if ((await run(id)) === 'signed_out') return;
+}
 
 /**
  * Background sync for the current profile: on start, after a session, when back online/visible, and every 5 min.
@@ -67,16 +85,21 @@ export function useSync(profileId: string | null, partnerIds: string[] = []): vo
   const partners = partnerIds.join(',');
   useEffect(() => {
     if (!profileId) return;
+    currentProfileId = profileId;
+    const partnerList = partners.split(',').filter(Boolean);
+    // own data after every review burst; partners only on start, visibility, reconnect and the timer
+    const runOwn = () => {
+      if (navigator.onLine !== false) void syncNow(profileId);
+    };
     const run = () => {
-      if (navigator.onLine === false) return;
-      void syncNow(profileId).then(() => Promise.all(partners.split(',').filter(Boolean).map((id) => syncNow(id))));
+      if (navigator.onLine !== false) void syncWithPartners(profileId, partnerList);
     };
     run();
-    const offEnd = onSessionEnd(run);
+    const offEnd = onSessionEnd(runOwn);
     let debounce: ReturnType<typeof setTimeout> | undefined;
     const offReview = onReviewRecorded(() => {
       clearTimeout(debounce);
-      debounce = setTimeout(run, REVIEW_DEBOUNCE_MS);
+      debounce = setTimeout(runOwn, REVIEW_DEBOUNCE_MS);
     });
     const onVisible = () => document.visibilityState === 'visible' && run();
     window.addEventListener('online', run);

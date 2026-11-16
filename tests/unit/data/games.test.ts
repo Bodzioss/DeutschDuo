@@ -38,3 +38,14 @@ describe('duel games', () => {
     expect((await db.games.get(g.id))!.duelDay).toBe('2026-11-16');
   });
 });
+
+describe('duel start marker', () => {
+  test('marks a duel as started once and reports it', async () => {
+    const { markDuelStarted, isDuelStarted } = await import('@/data/games');
+    expect(await isDuelStarted(db, '2026-11-16')).toBe(false);
+    expect(await markDuelStarted(db, '2026-11-16')).toBe(true);
+    expect(await markDuelStarted(db, '2026-11-16')).toBe(false); // second open: already started
+    expect(await isDuelStarted(db, '2026-11-16')).toBe(true);
+    expect(await isDuelStarted(db, '2026-11-17')).toBe(false);
+  });
+});

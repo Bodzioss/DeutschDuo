@@ -4,7 +4,8 @@ import { useCurrentProfile } from '@/stores/profileStore';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useProfileData } from '@/data/useProfileData';
 import { openProfileDb } from '@/data/db';
-import { peekWord, recordGame } from '@/data/games';
+import { markDuelStarted, peekWord, recordGame } from '@/data/games';
+import { syncNow } from '@/data/useSync';
 import { getWord, getWords } from '@/data/words';
 import { levelById, nextLevel } from '@/domain/wortpasjans/levels';
 import { duelForDay } from '@/domain/pair';
@@ -54,18 +55,42 @@ export function BoardScreen() {
   const data = useProfileData(profile?.id);
   const [attempt, setAttempt] = useState(0);
   const [params] = useSearchParams();
-  // ?duel=<today> → the pair's duel of the day: fixed seed + level for that day, first attempt only
-  const today = localDay(new Date());
-  const duelDay = params.get('duel') === today && duelForDay(today).levelId === level && attempt === 0 ? today : null;
+  // ?duel=<today> → the pair's duel of the day: fixed seed + level, first opening only. The day is frozen on mount,
+  // so a re-render after 03:00 does not turn a running duel into a different board.
+  const [today] = useState(() => localDay(new Date()));
+  const requested = params.get('duel');
+  const duelValid = requested === today && duelForDay(today).levelId === level;
+  const [duelMode, setDuelMode] = useState<'checking' | 'duel' | 'practice'>(requested ? 'checking' : 'practice');
+  const decided = useRef(false);
+  useEffect(() => {
+    if (!requested || !duelValid || !profile || decided.current) return;
+    decided.current = true;
+    void markDuelStarted(openProfileDb(profile.id), today).then((first) => setDuelMode(first ? 'duel' : 'practice'));
+  }, [requested, duelValid, profile, today]);
+  const duelDay = duelMode === 'duel' && attempt === 0 ? today : null;
   const fixedSeed = duelDay ? duelForDay(duelDay).seed : params.get('seed') !== null && /^\d+$/.test(params.get('seed')!) ? Number(params.get('seed')) : null;
-  const g = useDeal(level, data?.cards ?? null, attempt, fixedSeed, !!duelDay);
+  const g = useDeal(level, duelMode === 'checking' ? null : (data?.cards ?? null), attempt, fixedSeed, !!duelDay);
+  if (requested && !duelValid) {
+    return <p className="p-6 text-center">Ten pojedynek już minął. <Link to="/para" className="text-accent">Dzisiejszy pojedynek</Link></p>;
+  }
   if (!levelById(level)) return <p className="p-6">Nie ma takiej planszy. <Link to="/game" className="text-accent">Mapa</Link></p>;
   if (g === 'error') return <p className="p-6 text-center">Nie udało się rozdać tej planszy. <Link to="/game" className="text-accent">Wróć do mapy</Link></p>;
   if (!profile || !g) return <p className="p-6 text-center text-muted">Tasuję karty…</p>;
-  return <Board key={`${g.deal.seed}-${attempt}`} profile={profile} deal={g.deal} par={g.par} moveLimit={g.moveLimit} duelDay={duelDay} onRetry={() => setAttempt((a) => a + 1)} />;
+  return (
+    <Board
+      key={`${g.deal.seed}-${attempt}`}
+      profile={profile}
+      deal={g.deal}
+      par={g.par}
+      moveLimit={g.moveLimit}
+      duelDay={duelDay}
+      duelPractice={!!requested && duelMode === 'practice'}
+      onRetry={() => setAttempt((a) => a + 1)}
+    />
+  );
 }
 
-function Board({ profile, deal, par, moveLimit, duelDay, onRetry }: { profile: Profile; deal: Deal; par: number; moveLimit: number; duelDay: string | null; onRetry: () => void }) {
+function Board({ profile, deal, par, moveLimit, duelDay, duelPractice, onRetry }: { profile: Profile; deal: Deal; par: number; moveLimit: number; duelDay: string | null; duelPractice: boolean; onRetry: () => void }) {
   const b = useBoard(deal, moveLimit);
   const navigate = useNavigate();
   const startWords = useSessionStore((s) => s.startWords);
@@ -84,6 +109,7 @@ function Board({ profile, deal, par, moveLimit, duelDay, onRetry }: { profile: P
     const st = starsFor({ won, moves: b.state.moves, par, peeks: b.peeked.length });
     await recordGame(db, { level: deal.level, seed: deal.seed, won, stars: st, moves: b.state.moves, par, peeks: b.peeked.length, peekedWordIds: b.peeked, durationMs: b.durationMs(), now: new Date(), ...(duelDay ? { duelDay } : {}) });
     setResult({ stars: st, won });
+    if (duelDay) void syncNow(profile.id); // get the duel result to the partner quickly
   };
 
   useEffect(() => {
@@ -100,11 +126,18 @@ function Board({ profile, deal, par, moveLimit, duelDay, onRetry }: { profile: P
   };
 
   const quit = async () => {
+    if (duelDay && !result) {
+      // leaving a duel counts as a loss, otherwise the fixed board could be studied for free
+      if (!confirm('To pojedynek: wyjście liczy się jako przegrana. Zakończyć?')) return;
+      await finish(false);
+      navigate('/para');
+      return;
+    }
     if (b.state.moves > 0 && !result) {
       if (!confirm('Zakończyć planszę? Zostanie zapisana jako nieukończona.')) return;
       await finish(false);
     }
-    navigate('/game');
+    navigate(duelPractice ? '/para' : '/game');
   };
 
   const isTarget = (t: { kind: 'slot'; slot: number } | { kind: 'column'; col: number }) =>
@@ -130,7 +163,9 @@ function Board({ profile, deal, par, moveLimit, duelDay, onRetry }: { profile: P
   return (
     <div className="mx-auto flex min-h-full max-w-[480px] flex-col gap-3 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))]">
       <header className="flex items-center justify-between text-sm">
-        <button type="button" onClick={quit} className="py-2 pr-3 text-muted">✕ {duelDay ? '⚔️ Pojedynek' : `${level.city} ${level.index}/5`}</button>
+        <button type="button" onClick={quit} className="py-2 pr-3 text-muted">
+          ✕ {duelDay ? '⚔️ Pojedynek' : duelPractice ? 'Trening (pojedynek już rozpoczęty)' : `${level.city} ${level.index}/5`}
+        </button>
         <span className="tabular-nums" aria-label="Pozostałe ruchy">🦶 {b.movesLeft}</span>
         <span className="tabular-nums" aria-label="Darmowe podglądy">👁 {peeksLeft}</span>
       </header>
@@ -281,7 +316,7 @@ function Summary({ result, moves, peeked, levelId, duel, onPractise, onRetry }: 
         )}
         <div className="space-y-2">
           {peeked.length > 0 && <Button className="w-full" onClick={onPractise}>Ćwicz teraz ({peeked.length})</Button>}
-          {result.won && next && (
+          {result.won && next && !duel && (
             <Button variant={peeked.length ? 'secondary' : 'primary'} className="w-full" onClick={() => navigate(`/game/${next.id}`)}>
               Następna plansza: {next.city} {next.index}/5
             </Button>

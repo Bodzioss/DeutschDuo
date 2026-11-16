@@ -74,3 +74,21 @@ describe('handleSyncError', () => {
     expect(calls).toEqual([]);
   });
 });
+
+describe('syncWithPartners', () => {
+  test('partners are skipped when my own sync signed the device out', async () => {
+    const { syncWithPartners } = await import('@/data/useSync');
+    const calls: string[] = [];
+    await syncWithPartners('me', ['p1'], async (id) => {
+      calls.push(id);
+      return id === 'me' ? 'signed_out' : 'ok';
+    });
+    expect(calls).toEqual(['me']);
+  });
+  test('partners sync after me when all is fine', async () => {
+    const { syncWithPartners } = await import('@/data/useSync');
+    const calls: string[] = [];
+    await syncWithPartners('me', ['p1', 'p2'], async (id) => (calls.push(id), 'ok'));
+    expect(calls).toEqual(['me', 'p1', 'p2']);
+  });
+});

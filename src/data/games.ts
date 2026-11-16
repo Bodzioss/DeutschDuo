@@ -24,3 +24,21 @@ export async function peekWord(db: DuoDB, wordId: string, now: Date): Promise<vo
     await db.cards.put({ ...c, fsrs: { ...c.fsrs, due: now.toISOString() }, updatedAt: stamp.toISOString(), dirty: 1 });
   });
 }
+
+const duelKey = (day: string) => `duelStarted:${day}`;
+
+/**
+ * Marks today's duel as started on this device. Returns false when it had already been started: the board was seen,
+ * so any later attempt is practice, not the duel (prevents studying the fixed board before the scored try).
+ */
+export async function markDuelStarted(db: DuoDB, day: string): Promise<boolean> {
+  return db.transaction('rw', db.meta, async () => {
+    if (await db.meta.get(duelKey(day))) return false;
+    await db.meta.put({ key: duelKey(day), value: new Date().toISOString() });
+    return true;
+  });
+}
+
+export async function isDuelStarted(db: DuoDB, day: string): Promise<boolean> {
+  return !!(await db.meta.get(duelKey(day)));
+}

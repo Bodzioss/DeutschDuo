@@ -9,7 +9,7 @@ import { bestStarsByLevel, nextBoard } from '@/domain/wortpasjans/scoring';
 import { levelById } from '@/domain/wortpasjans/levels';
 import { Link } from 'react-router-dom';
 import { usePairData } from '@/features/pair/usePairData';
-import { duelGameOf, duelWinner, standings } from '@/domain/pair';
+import { duelGameOf, duelWinner, isTie, standings } from '@/domain/pair';
 import { localDay } from '@/domain/day';
 
 export function TodayScreen() {
@@ -79,6 +79,7 @@ export function TodayScreen() {
       {players && players.length > 1 && (() => {
         const today = localDay(new Date());
         const table = standings(players, today);
+        const tie = isTie(table);
         const mine = players.find((p) => p.profileId === profile.id)!;
         const partner = players.find((p) => p.profileId !== profile.id)!;
         const myDuel = duelGameOf(mine.games, today);
@@ -91,7 +92,7 @@ export function TodayScreen() {
               <span aria-hidden className="text-muted">›</span>
             </div>
             <p className="mt-1 text-sm text-muted">
-              {table.map((r) => `${r.name} ${Math.round(r.goalPct * 100)}%`).join(' · ')} · {duelText}
+              {table.map((r) => `${r.name} ${Math.round(r.goalPct * 100)}%`).join(tie ? ' = ' : ' · ')} · {duelText}
             </p>
           </Link>
         );

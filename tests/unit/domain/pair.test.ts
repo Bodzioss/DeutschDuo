@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
-  DUEL_LEVELS, duelForDay, duelGameOf, duelWinner, gameXp, pairStreak, reviewXp, standings, weekDays, weekGoalPct, weekStart, type Player,
+  DUEL_LEVELS, duelForDay, duelGameOf, duelWinner, gameXp, isTie, pairStreak, reviewXp, standings, weekDays, weekGoalPct, weekStart, type Player,
 } from '@/domain/pair';
 import { dailyActivity } from '@/domain/streak';
 import type { GameRecord, ReviewRecord } from '@/domain/types';
@@ -103,5 +103,47 @@ describe('duel', () => {
     expect(duelWinner(g({ peeks: 2 }), g({ peeks: 1 }))).toBe('b');
     expect(duelWinner(g({}), g({}))).toBe('draw');
     expect(duelWinner(g({}), undefined)).toBeNull();
+  });
+});
+
+describe('league fairness (review fixes)', () => {
+  const mk = (id: string, reviews: ReviewRecord[], games: GameRecord[] = []): Player => ({ profileId: id, name: id, goalMin: 15, reviews, games });
+  const full = (day: string, p: Partial<ReviewRecord> = {}) => rev(day, { durationMs: 15 * 60_000, ...p });
+  const monSat = ['2026-11-16', '2026-11-17', '2026-11-18', '2026-11-19', '2026-11-20', '2026-11-21'];
+
+  test('a finished week counts Sunday even when it is empty', () => {
+    const a = mk('a', monSat.map((d) => full(d)));
+    const b = mk('b', [...monSat.map((d) => full(d)), rev('2026-11-22', { durationMs: 7.5 * 60_000 })]);
+    const s = standings([a, b], '2026-11-22', { complete: true });
+    expect(s[0].profileId).toBe('b');
+    expect(s.find((x) => x.profileId === 'a')!.goalPct).toBeCloseTo(6 / 7);
+  });
+  test('days met break goal-% ties before XP', () => {
+    // both 100% on the counted days; b has more days met, a has far more XP
+    const a = mk('a', Array.from({ length: 50 }, () => full('2026-11-16')));
+    const b = mk('b', [full('2026-11-16'), full('2026-11-17')]);
+    const s = standings([a, b], '2026-11-17');
+    expect(s.map((x) => x.profileId)).toEqual(['b', 'a']);
+  });
+  test('game XP counts only the best result per board per day', () => {
+    const d = '2026-11-16';
+    const s = standings([mk('a', [], [game(d, { stars: 3 }), game(d, { stars: 3 }), game(d, { stars: 2, level: 'berlin-2' })])], d);
+    expect(s[0].xp).toBe(9 + 6);
+  });
+  test('lowering the goal late in the day does not turn the day into 100%', () => {
+    const a = mk('a', [rev('2026-11-16', { durationMs: 10 * 60_000, goalMin: 30 }), rev('2026-11-16', { durationMs: 60_000, goalMin: 10 })]);
+    expect(standings([a], '2026-11-16')[0].goalPct).toBeCloseTo(11 / 30);
+  });
+  test('the league shows the goal each player was judged against this week', () => {
+    const a = mk('a', [rev('2026-11-16', { goalMin: 20 })]);
+    expect(standings([a], '2026-11-16')[0].goalMin).toBe(20);
+  });
+  test('isTie', () => {
+    const s = standings([mk('a', []), mk('b', [])], '2026-11-16');
+    expect(isTie(s)).toBe(true);
+  });
+  test('a duel is compared only when both played the same board', () => {
+    const g1 = game('d', { duelDay: 'd', seed: 5, level: 'berlin-2' });
+    expect(duelWinner(g1, game('d', { duelDay: 'd', seed: 6, level: 'berlin-2', moves: 1 }))).toBeNull();
   });
 });

@@ -57,3 +57,16 @@ Do pracy bez chmury ustaw `VITE_BACKEND=fake`. Hasło to wtedy `test`, a dane zo
 - Zrób kilka fiszek, włącz tryb samolotowy, zamknij i otwórz aplikację. Wszystko ma działać.
 - Wyłącz tryb samolotowy i odczekaj chwilę. W Supabase **Table Editor → reviews** pojawią się nowe wiersze.
 - „Nowy telefon”: w przeglądarce w trybie prywatnym otwórz aplikację, wpisz hasło i wybierz profil. Postęp powinien być ten sam.
+
+## 6. Migracje bazy: zawsze **przed** wypchnięciem nowej wersji
+
+Każdą nową migrację z `supabase/migrations/` uruchom w **SQL Editor** (po kolei, każdą raz), a dopiero potem wypchnij kod na `main`.
+Nowa aplikacja z brakującą migracją nie potrafi zsynchronizować części danych.
+
+| Plik | Co dodaje |
+|---|---|
+| `0001_init.sql` | profile, karty, powtórki, RLS |
+| `0002_review_goal_min.sql` | cel dzienny zapisany przy każdej powtórce |
+| `0003_game_sessions.sql` | wyniki Wortpasjansu |
+| `0004_game_duel_day.sql` | pojedynek dnia |
+

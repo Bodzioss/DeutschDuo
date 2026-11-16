@@ -21,7 +21,8 @@ export interface SyncResult {
 }
 
 /** Push local changes, then pull everything new from the cloud. Throws on network errors (caller retries later). */
-export async function syncProfile(db: DuoDB, profileId: string, b: Backend): Promise<SyncResult> {
+/** `pullCards: false` for partner profiles: the league needs their reviews and games, not their card table. */
+export async function syncProfile(db: DuoDB, profileId: string, b: Backend, opts: { pullCards?: boolean } = {}): Promise<SyncResult> {
   const result: SyncResult = { pushedReviews: 0, pushedCards: 0, pulledReviews: 0, pulledCards: 0, pushedGames: 0, pulledGames: 0 };
 
   // 1. reviews (append-only, idempotent by id)
@@ -48,17 +49,19 @@ export async function syncProfile(db: DuoDB, profileId: string, b: Backend): Pro
   }
 
   // 3. pull cards
-  const cardsPull = await b.pullCards(profileId, (await getMeta<Cursor>(db, 'cardsCursor')) ?? null);
-  await db.transaction('rw', db.cards, db.meta, async () => {
-    for (const remote of cardsPull.rows) {
-      const merged = mergeCards(await db.cards.get(remote.id), remote);
-      if (merged) {
-        await db.cards.put(merged);
-        result.pulledCards++;
+  if (opts.pullCards !== false) {
+    const cardsPull = await b.pullCards(profileId, (await getMeta<Cursor>(db, 'cardsCursor')) ?? null);
+    await db.transaction('rw', db.cards, db.meta, async () => {
+      for (const remote of cardsPull.rows) {
+        const merged = mergeCards(await db.cards.get(remote.id), remote);
+        if (merged) {
+          await db.cards.put(merged);
+          result.pulledCards++;
+        }
       }
-    }
-    await setMeta(db, 'cardsCursor', cardsPull.cursor);
-  });
+      await setMeta(db, 'cardsCursor', cardsPull.cursor);
+    });
+  }
 
   // 4. pull reviews — never overwrite a local row (it may carry fields set after the push)
   const reviewsPull = await b.pullReviews(profileId, (await getMeta<Cursor>(db, 'reviewsCursor')) ?? null);
